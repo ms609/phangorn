@@ -85,9 +85,12 @@ sankoff.quartet <- function(dat, cost, p, l, weight) {
 #'
 #' @rdname parsimony
 #' @export
-parsimony <- function(tree, data, method = "fitch", ...) {
-  if (class(data)[1] != "phyDat") stop("data must be of class phyDat")
-  if (method == "sankoff") result <- sankoff(tree, data, ...)
+## parsimony <- function(tree, data, cost=NULL, method = NULL)
+parsimony <- function(tree, data, method = "fitch", cost=NULL, ...) {
+  if (!inherits(data, "phyDat")) stop("data must be of class phyDat")
+  method <- match.arg(method, c("fitch", "sankoff"))
+  if(!any(is.binary(tree)) || !is.null(cost)) method <- "sankoff"
+  if (method == "sankoff") result <- sankoff(tree, data, cost=cost, ...)
   if (method == "fitch") result <- fitch(tree, data, ...)
   result
 }
@@ -121,9 +124,7 @@ compressSites <- function(data) {
   l <- length(lev)
   nr <- attr(data, "nr")
   nc <- length(data)
-
   data <- unlist(data, FALSE, FALSE)
-
   attr(data, "dim") <- c(nr, nc)
   uni <- match(lev, LEV)
   fun <- function(x, uni) {
@@ -131,26 +132,37 @@ compressSites <- function(data) {
     res <- if (any(is.na(match(u, uni)))) return(x)
     match(x, u)
   }
-  data <- t(apply(data, 1, fun, uni))
-  ddd <- fast.table(data)
-  data <- ddd$data
-  class(data) <- "list"
-  attrData$weight <- tapply(attrData$weight, ddd$index, sum)
+  data <- apply(data, 1, fun, uni)
+  index <- grp_duplicated(data, MARGIN=2L)
+  pos <- which(!duplicated(index))
+  ntaxa <- nrow(data)
+  res <- vector("list", ntaxa)
+  for(i in seq_len(ntaxa)) res[[i]] <- data[i, pos]
+  attrData$weight <- tapply(attrData$weight, index, sum)
   attrData$index <- NULL
   attrData$nr <- length(attrData$weight)
   attrData$compressed <- TRUE
-  attributes(data) <- attrData
-  data
+  attributes(res) <- attrData
+  res
 }
 
 
-#
-# Branch and bound
-#
+# parsinfo <- function(x) {
+#  low <- lowerBound(x)
+#  up <- upperBound(x)
+#  ind <- which(low == up)
+#  cbind(ind, low[ind])
+#}
+
 
 parsinfo <- function(x) {
-  low <- lowerBound(x)
+  nstates <- attr(x, "nc")
   up <- upperBound(x)
+  eps <- 1e-8
+  low <- up
+  low[up > (nstates - eps)] <- nstates - 1
+  ind <- which( (up > (1+eps))  & (up < (nstates-eps)) )
+  if(length(ind)>0) low[ind] <- lowerBound(getRows( x, ind ))
   ind <- which(low == up)
   cbind(ind, low[ind])
 }
@@ -164,20 +176,14 @@ lowerBound <- function(x, cost = NULL) {
   contrast <- attr(x, "contrast")
   rownames(contrast) <- attr(x, "allLevels")
   colnames(contrast) <- attr(x, "levels")
-  attr(x, "weight") <- rep(1, nr)
-  attr(x, "index") <- NULL
-
-  y <- as.character(x)
-  #    states <- apply(y, 2, unique.default) return type not known
-  states <- vector("list", ncol(y))
-  for (i in seq_len(ncol(y))) states[[i]] <- unique.default(y[, i])
-
-  singles <- which(rowSums(contrast) == 1) #
-  noinfo <- which(rowSums(contrast) == nc) #
+  nmax <- nrow(contrast)
+  z <- matrix(unlist(x, FALSE, FALSE), length(x), length(attr(x, "weight")),
+              byrow = TRUE)
+  states <- apply(z, 2, unique.default, nmax = nmax)
+  if(inherits(states, "matrix"))states <- asplit(states, 2)
+  singles <- which(rowSums(contrast) == 1)
+  noinfo <- which(rowSums(contrast) == nc)
   ambiguous <- which( (rowSums(contrast) > 1) & (rowSums(contrast) < nc))
-  singles <- names(singles)
-  noinfo <- names(noinfo)
-  ambiguous <- names(ambiguous)
 
   fun <- function(states, contrast, singles, noinfo, ambiguous) {
     if (length(states) == 1) return(0)
@@ -545,7 +551,11 @@ pratchet <- function(data, start = NULL, method = "fitch", maxit = 1000,
                                         trace = trace, method = method,
                                         rearrangements = rearrangements, ...)
     tree <- start
-    if(!is.binary(tree)) tree <- multi2di(tree)
+    if (!is.binary(tree)){
+      # should not be necessary, if unique sequences are used
+      tree <- multi2di(tree)
+      if(method=="fitch") tree <- unroot(tree)
+    }
     data <- subset(data, tree$tip.label)
     attr(tree, "pscore") <- parsimony(tree, data, method = method, ...)
     mp <- attr(tree, "pscore")
@@ -644,7 +654,7 @@ optim.sankoff <- function(tree, data, cost = NULL, trace = 1, ...) {
   if (is.rooted(tree)) tree <- unroot(tree)
   if (is.null(attr(tree, "order")) || attr(tree, "order") == "cladewise")
     tree <- reorder(tree, "postorder")
-  if (class(data)[1] != "phyDat") stop("data must be of class phyDat")
+  if (!inherits(data, "phyDat")) stop("data must be of class phyDat")
   addTaxa <- FALSE
   mapping <- map_duplicates(data)
   if (!is.null(mapping)) {

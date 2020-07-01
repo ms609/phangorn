@@ -1,10 +1,17 @@
 candidate.tree <- function(x){
-  tree <- random.addition(x)
-  tree <- optim.parsimony(tree, x)
-  tree <- multi2di(tree)
-  tree <- unroot(tree)
-  tree <- acctran(tree, x)
-  tree$edge.length <- tree$edge.length / sum(attr(x, "weight"))
+  if(attr(x, "nc") > 31){
+     dm <- dist.ml(x)
+     tree <- fastme.bal(dm, nni = TRUE, spr = FALSE, tbr = FALSE)
+     tree$edge.length[tree$edge.length<0] <- 1e-8
+  }
+  else{
+    tree <- random.addition(x)
+    tree <- optim.parsimony(tree, x)
+    tree <- multi2di(tree)
+    tree <- unroot(tree)
+    tree <- acctran(tree, x)
+    tree$edge.length <- tree$edge.length / sum(attr(x, "weight"))
+  }
   tree
 }
 
@@ -103,8 +110,9 @@ bootstrap.pml <- function(x, bs = 100, trees = TRUE, multicore = FALSE,
   extras <- match.call(expand.dots = FALSE)$...
   rearr <- c("optNni", "rearrangement")
   tmp <- pmatch(names(extras), rearr)
+  tmp <- tmp[!is.na(tmp)]
   do_rearr <- FALSE
-  if(!is.na(tmp)){
+  if(length(tmp)>0){
     if(tmp==1){
       do_rearr <- extras$optNni
       if(is.name(do_rearr)) do_rearr <- as.logical(as.character(do_rearr))
@@ -207,7 +215,7 @@ bootstrap.phyDat <- function(x, FUN, bs = 100, multicore = FALSE,
       res <- lapply(BS, fitPar, x, ...)
     }
   }
-  if (class(res[[1]]) == "phylo") {
+  if (inherits(res[[1]], "phylo")) {
     class(res) <- "multiPhylo"
     res <- .compressTipLabel(res) # save memory
   }
@@ -354,11 +362,14 @@ plotBS <- function(tree, BStrees, type = "unrooted", bs.col = "black",
 #' majority_consensus <- consensus(bs, p=.5)
 #' all_compat <- allCompat(bs)
 #' max_clade_cred <- maxCladeCred(bs)
+#'
+#' old.par <- par(no.readonly = TRUE)
 #' par(mfrow = c(2,2), mar = c(1,4,1,1))
 #' plot(strict_consensus, main="Strict consensus tree")
 #' plot(majority_consensus, main="Majority consensus tree")
 #' plot(all_compat, main="Majority consensus tree with compatible splits")
 #' plot(max_clade_cred, main="Maximum clade credibility tree")
+#' par(old.par)
 #'
 #' # compute clade credibility for trees given a prop.part object
 #' pp <- prop.part(bs)

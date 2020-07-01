@@ -33,11 +33,11 @@
 #' @aliases
 #' dna2codon codon2dna
 #' @param x An object containing sequences.
-#' @param code The ncbi genetic code number for translation (see details).
-#' By default the standard genetic code is used.
 #' @param codonstart an integer giving where to start the translation. This
 #' should be 1, 2, or 3, but larger values are accepted and have for effect to
 #' start the translation further within the sequence.
+#' @param code The ncbi genetic code number for translation (see details).
+#' By default the standard genetic code is used.
 #' @param ambiguity character for ambiguous character and no contrast is
 #' provided.
 #' @param ... further arguments passed to or from other methods.
@@ -56,7 +56,7 @@
 #'
 #' @rdname dna2codon
 #' @export
-dna2codon <- function(x, code=1, codonstart=1, ambiguity="---", ...){
+dna2codon <- function(x, codonstart=1, code=1, ambiguity="---", ...){
   if(!inherits(x, "phyDat"))stop("x needs to be of class phyDat!")
   if(attr(x, "type")=="AA")stop("x needs to be a nucleotide sequence!")
 
@@ -69,7 +69,6 @@ dna2codon <- function(x, code=1, codonstart=1, ambiguity="---", ...){
     keep <- seq_len( (n_sites %/% 3) * 3 )
     x <- subset(x, select=keep, site.pattern=FALSE)
   }
-  # phyDat.codon_old(as.character(x), ambiguity=ambiguity, ...)
   phyDat.codon(as.character(x), ambiguity=ambiguity, code=code, ...)
 }
 
@@ -111,208 +110,4 @@ tstv_subs <- function(code=1, stop.codon=FALSE){
   }
   res[lower.tri(res)]
 }
-
-
-# odl version
-phyDat.codon_old <- function (data, return.index = TRUE, ambiguity = "---",
-                          NA_as_ambiguous=TRUE){
-  if(is.matrix(data)) nam <- row.names(data)
-  else nam <- names(data)
-  if (inherits(data,"DNAbin"))
-    data <- as.character(data)
-  if(inherits(data, "character")) data <- as.matrix(data)
-  if (is.matrix(data))
-    data <- as.data.frame(t(data), stringsAsFactors = FALSE)
-  else data <- as.data.frame(data, stringsAsFactors = FALSE)
-
-  data <- data.frame(tolower(as.matrix(data)), stringsAsFactors = FALSE)
-
-  data[data=="u"] <- "t"
-
-  splseq <- function (seq, frame = 0){
-    starts <- seq(from = frame + 1, to = length(seq), by = 3L)
-    sapply(starts, function(x) paste(seq[x:(x + 2L)], collapse=""))
-  }
-
-  data <- data.frame(lapply(data, splseq))
-  compress <- TRUE
-  if(nrow(data)==1) compress <- FALSE
-  if(compress){
-    ddd <- fast.table(data)
-    data <- ddd$data
-    weight <- ddd$weight
-    index <- ddd$index
-  }
-  else{
-    p <- length(data[[1]])
-    weight <- rep(1, p)
-    index <- 1:p
-  }
-  codon <- c("aaa", "aac", "aag", "aat", "aca", "acc", "acg", "act",
-             "aga", "agc", "agg", "agt", "ata", "atc", "atg", "att",
-             "caa", "cac", "cag", "cat", "cca", "ccc", "ccg", "cct", "cga",
-             "cgc", "cgg", "cgt", "cta", "ctc", "ctg", "ctt", "gaa", "gac",
-             "gag", "gat", "gca", "gcc", "gcg", "gct", "gga", "ggc", "ggg",
-             "ggt", "gta", "gtc", "gtg", "gtt", "tac", "tat",
-             "tca", "tcc", "tcg", "tct", "tgc", "tgg", "tgt", "tta",
-             "ttc", "ttg", "ttt")
-  # ohne Stopcodons "taa", "tag", "tga",
-
-  CODON <- diag(61)
-
-  if(NA_as_ambiguous){
-    ambiguity <- unique(c("---", ambiguity))
-  }
-  if(ambiguity!=""){
-    codon_amb <- c(codon, ambiguity)
-    CODON <- rbind(CODON, matrix(1, length(ambiguity), 61))
-  }
-  else codon_amb <- codon
-  dimnames(CODON) <- list(codon_amb, codon)
-
-  q <- length(data)
-  p <- length(data[[1]])
-  tmp <- vector("list", q)
-
-  d <- dim(data)
-  att <- attributes(data)
-  data <- match(unlist(data), codon_amb)
-  if(NA_as_ambiguous){
-    ind <- match("---", codon_amb)
-    data[is.na(data)] <- ind
-  }
-  attr(data, "dim") <- d
-  data <- as.data.frame(data, stringsAsFactors=FALSE)
-  attributes(data) <- att
-
-  row.names(data) <- as.character(1:p)
-
-  data <- na.omit(data)
-  rn <- as.numeric(rownames(data))
-
-  if(!is.null(attr(data, "na.action"))) warning("Found unknown characters. Deleted sites with with unknown states.")
-
-  aaa <- match(index, attr(data, "na.action"))
-  index <- index[is.na(aaa)]
-  index <- match(index, unique(index))
-  rn <- as.numeric(rownames(data))
-  attr(data, "na.action") <- NULL
-
-  weight <- weight[rn]
-  p <- dim(data)[1]
-  names(data) <- nam
-  attr(data, "row.names") <- NULL
-  attr(data, "weight") <- weight
-  attr(data, "nr") <- p
-  attr(data, "nc") <- 61
-  if (return.index)
-    attr(data, "index") <- index
-  attr(data, "levels") <- codon
-  attr(data, "allLevels") <- codon_amb
-  attr(data, "type") <- "CODON"
-  attr(data, "contrast") <- CODON
-  class(data) <- "phyDat"
-  data
-}
-
-
-
-phyDat.codon <- function (data, return.index = TRUE, ambiguity = "---",
-                          NA_as_ambiguous=TRUE, code=1){
-  if(is.matrix(data)) nam <- row.names(data)
-  else nam <- names(data)
-  if (inherits(data,"DNAbin"))
-    data <- as.character(data)
-  if(inherits(data, "character")) data <- as.matrix(data)
-  if (is.matrix(data))
-    data <- as.data.frame(t(data), stringsAsFactors = FALSE)
-  else data <- as.data.frame(data, stringsAsFactors = FALSE)
-
-  data <- data.frame(tolower(as.matrix(data)), stringsAsFactors = FALSE)
-
-  data[data=="u"] <- "t"
-
-  splseq <- function (seq, frame = 0){
-    starts <- seq(from = frame + 1, to = length(seq), by = 3L)
-    sapply(starts, function(x) paste(seq[x:(x + 2L)], collapse=""))
-  }
-
-  data <- data.frame(lapply(data, splseq))
-  compress <- TRUE
-  if(nrow(data)==1) compress <- FALSE
-  if(compress){
-    ddd <- fast.table(data)
-    data <- ddd$data
-    weight <- ddd$weight
-    index <- ddd$index
-  }
-  else{
-    p <- length(data[[1]])
-    weight <- rep(1, p)
-    index <- 1:p
-  }
-
-
-  tmp <- .CODON[, as.character(code)]
-  codon <- rownames(.CODON)
-  codon <- codon[tmp != "*"] # no stop codons
-
-  CODON <- diag(length(codon))
-
-  if(NA_as_ambiguous){
-    ambiguity <- unique(c("---", ambiguity))
-  }
-  if(ambiguity!=""){
-    codon_amb <- c(codon, ambiguity)
-    CODON <- rbind(CODON, matrix(1, length(ambiguity), length(codon)))
-  }
-  else codon_amb <- codon
-  dimnames(CODON) <- list(codon_amb, codon)
-
-  q <- length(data)
-  p <- length(data[[1]])
-  tmp <- vector("list", q)
-
-  d <- dim(data)
-  att <- attributes(data)
-  data <- match(unlist(data), codon_amb)
-  if(NA_as_ambiguous){
-    ind <- match("---", codon_amb)
-    data[is.na(data)] <- ind
-  }
-  attr(data, "dim") <- d
-  data <- as.data.frame(data, stringsAsFactors=FALSE)
-  attributes(data) <- att
-
-  row.names(data) <- as.character(1:p)
-
-  data <- na.omit(data)
-  rn <- as.numeric(rownames(data))
-
-  if(!is.null(attr(data, "na.action"))) warning("Found unknown characters. Deleted sites with with unknown states.")
-
-  aaa <- match(index, attr(data, "na.action"))
-  index <- index[is.na(aaa)]
-  index <- match(index, unique(index))
-  rn <- as.numeric(rownames(data))
-  attr(data, "na.action") <- NULL
-
-  weight <- weight[rn]
-  p <- dim(data)[1]
-  names(data) <- nam
-  attr(data, "row.names") <- NULL
-  attr(data, "weight") <- weight
-  attr(data, "nr") <- p
-  attr(data, "nc") <- length(codon)
-  if (return.index)
-    attr(data, "index") <- index
-  attr(data, "levels") <- codon
-  attr(data, "allLevels") <- codon_amb
-  attr(data, "type") <- "CODON"
-  attr(data, "code") <- code
-  attr(data, "contrast") <- CODON
-  class(data) <- "phyDat"
-  data
-}
-
 
