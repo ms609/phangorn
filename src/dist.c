@@ -1,20 +1,22 @@
 /*
  * dist.c
  *
- * (c) 2008-2019 Klaus Schliep (klaus.schliep@gmail.com)
+ * (c) 2008-2021 Klaus Schliep (klaus.schliep@gmail.com)
  *
  *
  * This code may be distributed under the GNU GPL
  *
  */
 
-# define USE_RINTERNALS
+//#define both_non_NA(a,b) (!ISNA(a) && !ISNA(b))
+
 
 #include <R.h>
-// #include <R_ext/Lapack.h>
 #include <Rinternals.h>
 #include <Rmath.h>
-//#include <math.h>
+
+
+
 
 
 // off-diagonal
@@ -39,7 +41,7 @@ int give_index2(int i, int j, int n)
 }
 
 
-
+/*
 void giveIndex(int *left, int* right, int *ll, int *lr, int *n, int *res){
     int i, j, k;
     k=0;
@@ -62,7 +64,7 @@ void giveIndex2(int *left, int* right, int *ll, int *lr, int *n, int *res){
              }
         }
     }
-
+*/
 
 
 
@@ -75,7 +77,7 @@ void PD(int *x, int *y, int *n, int *weight){
 }
 
 
-void pwIndex(int *left, int* right, int *l, int *n, double *w, double *res){
+void pwIndex(const int *left, const int* right, int *l, int *n, double *w, double *res){
     int i, k;
     k=0;
     for (i = 0; i < *l; i++){
@@ -83,7 +85,19 @@ void pwIndex(int *left, int* right, int *l, int *n, double *w, double *res){
         res[k] += w[i];
         }
     }
-
+/*
+void pwIndex2(int *left, int* right, int* pos, int *l, int *n, double *w, double *res){
+    int i, k, li, ri;
+    for (i = 0; i < *l; i++){
+        li = pos[left[i]-1L];
+        ri = pos[right[i]-1L];
+        if(li > 0 && ri > 0) {
+            k = give_index2(li, ri, *n);
+            res[k] += w[i];
+        }
+    }
+}
+*/
 
 
 SEXP PWI(SEXP LEFT, SEXP RIGHT, SEXP L, SEXP N, SEXP W, SEXP LI){
@@ -95,32 +109,17 @@ SEXP PWI(SEXP LEFT, SEXP RIGHT, SEXP L, SEXP N, SEXP W, SEXP LI){
     UNPROTECT(1);
     return(res);
 }
-
-
-
-void C_fhm(double *v, int *n){
-    unsigned int level, i, j;
-    unsigned int start, step, num_splits;
-    unsigned int max_n = (unsigned int)*n;
-    double vi, vj;
-    num_splits = (1 << (*n));
-    step = 1;
-    for(level = 0; level < max_n; level++){
-        start = 0;
-        while(start < (num_splits-1)){
-            for(i = start; i < (start + step); i++){
-                j = i + step;
-                vi = v[i];
-                vj = v[j];
-                v[i] = vi + vj;
-                v[j] = vi - vj;
-            }
-            start = start + 2*step;
-        }
-        step *= 2;
-    }
+/*
+SEXP PWI2(SEXP LEFT, SEXP RIGHT, SEXP POS, SEXP L, SEXP N, SEXP W, SEXP LI){
+    int i, li=INTEGER(LI)[0];
+    SEXP res;
+    PROTECT(res = allocVector(REALSXP, li));
+    for(i = 0; i < li; i++)REAL(res)[i] = 0.0;
+    pwIndex2(INTEGER(LEFT), INTEGER(RIGHT), INTEGER(POS), INTEGER(L), INTEGER(N), REAL(W), REAL(res));
+    UNPROTECT(1);
+    return(res);
 }
-
+*/
 
 void distance_hadamard(double *d, int n) {
     unsigned int num_splits;
@@ -188,7 +187,7 @@ SEXP dist2spectra(SEXP dm, SEXP nx, SEXP ns) {
     return(result);
 }
 
-
+/*
 // speed up some code for NJ
 void out(double *d, double *r, int *n, int *k, int *l){
     int i, j;
@@ -207,19 +206,5 @@ void out(double *d, double *r, int *n, int *k, int *l){
         }
     }
 }
-
-
-// hamming distance
-void distHamming(int *x, double *weight, int *nr, int *l, double *d){
-    int i, j, k, m;
-    k = 0L;
-    for(i = 0; i< (*l-1L); i++){
-        for(j = (i+1L); j < (*l); j++){
-             for(m=0; m<(*nr); m++){
-                 if(!(x[i*(*nr) + m] & x[j*(*nr) + m])) d[k] += weight[m];
-                 }
-             k++;
-        }
-    }
-}
+*/
 

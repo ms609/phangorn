@@ -47,14 +47,14 @@ write.splits(x, file = "", zero.print = ".", one.print = "|",
 \value{
 \code{write.nexus.splits} and \code{write.nexus.networx} write out
 the \code{splits} and \code{networx} object to read with
-other software like Splitstree.
+other software like SplitsTree.
 \code{read.nexus.splits} and \code{read.nexus.networx} return an \code{splits}
 and \code{networx} object.
 }
 \description{
 \code{read.nexus.splits}, \code{write.nexus.splits}, \code{read.nexus.networx}, \code{write.nexus.networx}
 can be used to import and export splits and networks with nexus format
-and allow to exchange these object with other software like Splitstree.
+and allow to exchange these object with other software like SplitsTree.
 \code{write.splits} returns a human readable output.
 }
 \note{
@@ -67,7 +67,7 @@ are separated with white-space. Comments in square brackets are ignored.
 (sp <- as.splits(rtree(5)))
 write.nexus.splits(sp)
 spl <- allCircularSplits(5)
-plot(as.networx(spl), "2D")
+plot(as.networx(spl))
 write.splits(spl, print.labels = FALSE)
 
 }

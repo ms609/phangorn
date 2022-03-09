@@ -1,8 +1,8 @@
-# replaces fast.match & fast.match2
 grp_duplicated <- function(x, MARGIN = 1, factor=FALSE, fromLast = FALSE, ...)
 {
   ans <- .Call(grpDupAtomMat, x, as.integer(MARGIN), as.logical(fromLast))
-  if(fromLast) ans[] <- (attr(ans, 'nlevels'):1L)[ans] # ensure the group ids agree with row/col index of result from "unique"
+  if(fromLast) ans[] <- (attr(ans, 'nlevels'):1L)[ans]
+  # ensure the group ids agree with row/col index of result from "unique"
   if(factor) {
     attr(ans, 'levels') <- as.character(seq_len(attr(ans, 'nlevels')))
     class(ans) <- 'factor'
@@ -87,16 +87,23 @@ phyDat.DNA <- function (data, return.index = TRUE, compress = TRUE){
 
 
 phyDat.default <- function (data, levels = NULL, return.index = TRUE,
-                            contrast = NULL, ambiguity = "?", compress=TRUE, ...){
+                        contrast = NULL, ambiguity = "?", compress=TRUE, ...){
   if (is.matrix(data))
     nam <- row.names(data)
   else nam <- names(data)
   if(is.null(nam))stop("data object must contain taxa names")
+  if(inherits(data, "factor")){
+    if(is.null(levels)) levels <- levels(data)
+    data <- as.matrix(data)
+  }
   if(inherits(data, "list")) data <- as.data.frame(data)
   if(inherits(data, "data.frame")) data <- t(as.matrix(data))
   if(inherits(data, "character") | inherits(data, "numeric"))
     data <- as.matrix(data)
-  if (inherits(data, "DNAbin")) data <- as.character(data)
+  if (inherits(data, "DNAbin") | inherits(data, "AAbin"))
+    if(is.list(data)) data <- as.matrix(data)
+  if (inherits(data, "DNAbin") | inherits(data, "AAbin") |
+      inherits(data, "phyDat")) data <- as.character(data)
   if(ncol(data)==1) compress <- FALSE
   if(compress){
     index <- grp_duplicated(data, MARGIN=2)
@@ -136,7 +143,7 @@ phyDat.default <- function (data, levels = NULL, return.index = TRUE,
     ind_na[is.na(res[[i]])] <- TRUE
   }
   if(any(ind_na)){
-    warning("Found unknown characters (not supplied in levels). Deleted sites with with unknown states.")
+    warning("Found unknown characters (not supplied in levels). Deleted sites with unknown states.")
     res <- lapply(res, function(x, ind_na)x[!ind_na], ind_na)
     weight <- weight[!ind_na]
     index <- index[which(ind_na == FALSE)]
@@ -206,7 +213,7 @@ phyDat.AA <- function (data, return.index = TRUE){
     ind_na[is.na(res[[i]])] <- TRUE
   }
   if(any(ind_na)){
-    warning("Found unknown characters (not supplied in levels). Deleted sites with with unknown states.")
+    warning("Found unknown characters (not supplied in levels). Deleted sites with unknown states.")
     res <- lapply(res, function(x, ind_na)x[!ind_na], ind_na)
     weight <- weight[!ind_na]
     index <- index[which(ind_na == FALSE)]
@@ -237,7 +244,8 @@ phyDat.codon <- function (data, return.index = TRUE, ambiguity = "---",
     data <- as.matrix(data)
     data <- tolower(data)
   }
-  if (inherits(data,"DNAbin") || inherits(data, "phyDat")) data <- as.character(data)
+  if (inherits(data,"DNAbin") || inherits(data, "phyDat"))
+    data <- as.character(data)
 
   data[data=="u"] <- "t"
   stopcodon <- match.arg(stopcodon, c("exclude", "include"))
@@ -298,7 +306,7 @@ phyDat.codon <- function (data, return.index = TRUE, ambiguity = "---",
     res <- lapply(res, function(x, ind){x[is.na(x)] <- ind; x}, ind)
   }
   else if(any(ind_na)){
-    warning("Found unknown characters. Deleted sites with with unknown states.")
+    warning("Found unknown characters. Deleted sites with unknown states.")
     res <- lapply(res, function(x, ind_na)x[!ind_na], ind_na)
     weight <- weight[!ind_na]
     index <- index[which(ind_na == FALSE)]

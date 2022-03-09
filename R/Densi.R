@@ -62,7 +62,7 @@ add_tiplabels <- function(xy, tip.label, direction, adj, font, srt = 0, cex = 1,
 #' This should avoid too many unnecessary crossings of edges.
 #' Trees should be rooted, other wise the output may not be visually pleasing.
 #' \code{jitter} shifts trees a bit so that they are not exactly on top of each other.
-#' If \code{amount == 0}, it is ignored. If \code{random=TRUE} the result of the perputation is
+#' If \code{amount == 0}, it is ignored. If \code{random=TRUE} the result of the permutation is
 #' \code{runif(n, -amount, amount)}, otherwise \code{seq(-amount, amount, length=n)}, where \code{n <- length(x)}.
 #' @param x an object of class \code{multiPhylo}.
 #' @param type a character string specifying the type of phylogeny, so far
@@ -75,7 +75,7 @@ add_tiplabels <- function(xy, tip.label, direction, adj, font, srt = 0, cex = 1,
 #' and "downwards".
 #' @param optim not yet used.
 #' @param scaleX scale trees to have identical heights.
-#' @param col a skalar or vector giving the colours used to draw the edges for
+#' @param col a scalar or vector giving the colours used to draw the edges for
 #' each plotted phylogeny. These are taken to be in the same order than input
 #' trees x. If fewer colours are given than the number of trees, then the
 #' colours are recycled.
@@ -93,13 +93,13 @@ add_tiplabels <- function(xy, tip.label, direction, adj, font, srt = 0, cex = 1,
 #' @param label.offset a numeric giving the space between the nodes and the tips of the
 #' phylogeny and their corresponding labels.
 #' @param scale.bar a logical specifying whether add scale.bar to the plot.
-#' @param jitter allows to shift treees. a list with two arguments: the amount of
+#' @param jitter allows to shift trees. a list with two arguments: the amount of
 #' jitter and random or equally spaced (see details below)
 #' @param \dots further arguments to be passed to plot.
 #' @author Klaus Schliep \email{klaus.schliep@@gmail.com}
 #' @seealso \code{\link{plot.phylo}}, \code{\link{plot.networx}}, \code{\link{jitter}}
 #' @references densiTree is inspired from the great
-#' \href{https://www.cs.auckland.ac.nz/~remco/DensiTree}{DensiTree} program of Remco
+#' \href{https://www.cs.auckland.ac.nz/~remco/DensiTree/}{DensiTree} program of Remco
 #' Bouckaert.
 #'
 #' Remco R. Bouckaert (2010) DensiTree: making sense of sets of phylogenetic

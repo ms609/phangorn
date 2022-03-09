@@ -5,11 +5,11 @@
 \alias{networx}
 \alias{as.networx.splits}
 \alias{as.networx.phylo}
-\title{Conversion among phylogenetic network 0bjects}
+\title{Conversion among phylogenetic network objects}
 \usage{
 as.networx(x, ...)
 
-\method{as.networx}{splits}(x, planar = FALSE, coord = c("none", "2D", "3D"), ...)
+\method{as.networx}{splits}(x, planar = FALSE, coord = "none", ...)
 
 \method{as.networx}{phylo}(x, ...)
 }

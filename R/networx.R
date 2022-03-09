@@ -16,6 +16,7 @@ allCircularSplits <- function(k, labels = NULL) {
     tmp <- (1L:y) + x
     tmp %% (k + 1L) + tmp %/% (k + 1L)
   }
+
   k <- as.integer(k)
   l <- (k - 1L) %/% 2L
   res <- vector("list", k * (k - 1L) / 2)
@@ -32,8 +33,8 @@ allCircularSplits <- function(k, labels = NULL) {
       m <- k %/% 2
       res[(ind + 1):(ind + m)] <- lapply(0L:(m - 1L), fun, m)
     }
-
   }
+  res <- lapply(res, sort)
   if (is.null(labels)) labels <- as.character(1:k)
   attr(res, "labels") <- labels
   attr(res, "cycle") <- 1:k
@@ -42,14 +43,14 @@ allCircularSplits <- function(k, labels = NULL) {
 }
 
 
-getIndex <- function(left, right, n) {
-  if (n < max(left) | n < max(right)) stop("Error")
-  left <- as.integer(left)
-  right <- as.integer(right)
-  ll <- length(left)
-  lr <- length(right)
-  .C("giveIndex", left, right, ll, lr, as.integer(n), integer(ll * lr))[[6]] + 1
-}
+#getIndex <- function(left, right, n) {
+#  if (n < max(left) | n < max(right)) stop("Error")
+#  left <- as.integer(left)
+#  right <- as.integer(right)
+#  ll <- length(left)
+#  lr <- length(right)
+#  .C("giveIndex", left, right, ll, lr, as.integer(n), integer(ll * lr))[[6]] + 1
+#}
 
 
 splits2design <- function(obj, weight = NULL) {
@@ -66,9 +67,8 @@ splits2design <- function(obj, weight = NULL) {
     if (p0[k] != 0) i[(p[k] + 1):p[k + 1]] <- getIndex(sp, l[-sp], m)
   }
   dims <- c(m * (m - 1) / 2, n)
-  sparseMatrix(i = i, p = p, x = 1.0, dims = dims)
+  sparseMatrix(i = i, p = p, x=1, dims = dims)
 }
-
 
 
 addEdge <- function(network, desc, spl) {
@@ -77,45 +77,27 @@ addEdge <- function(network, desc, spl) {
   child <- edge[, 2]
   nTips <- length(network$tip.label)
 
-  desc2 <- SHORTwise(desc, nTips)
+  desc2 <- SHORTwise(desc) #, nTips)
   split <- desc2[spl]
 
   index <- network$splitIndex
-  ind <- which(compatible2(split, desc2[index]) == 1)
+  ind <- which(compatible(split, desc2[index]) == 1)
   if (is.null(ind) | (length(ind) == 0)) return(network)
   add <- TRUE
 
-  X <- as.matrix(desc2)
-  rsX <- rowSums(X)
-  z <- X %*% X[spl, ]
-  v <- which((rsX == z)[index] == TRUE)
+  v <- sort(match(split[[1]], edge[,2]))
 
-
-  # intersection of shortest pathes of both partitions
-  # best with similar to circNetwork with shortest_paths
-
-  while (add) {
-    tmp <- ind
-    for (i in ind) {
-      tmp2 <- which(compatible2(desc2[index][i], desc2[index]) == 1)
-      tmp <- union(tmp, tmp2)
-    }
-    if (identical(ind, tmp)) {
-      ind <- tmp
-      add <- FALSE
-    }
-    ind <- tmp
+  fromTo <- intersect(attr(desc, "cycle"), split[[1]])
+  fromTo <- parent[match(fromTo, child)]
+  g <- graph(t(edge), directed = FALSE)
+  ind <- NULL
+  for (i in 2:length(fromTo)) {
+    #sptmp <- shortest_paths(g, fromTo[i - 1], fromTo[i], output = c("epath"))$epath[[1]]
+    d <- all_shortest_paths(g, fromTo[i - 1], fromTo[i])$res
+    sptmp <- unlist( lapply(d, \(d) E(g, path=d)) )
+    ind <- c(ind, sptmp) # [-c(1, length(sptmp))])
   }
-
-
-  g <- graph(t(network$edge[ind, ]), directed = FALSE)
-  dec <- decompose(g, min.vertices = 2)
-
-  #    fromTo <- sort(match(split[[1]], attr(desc, "cycle")))
-  #    sptmp = shortest_paths(g, fromTo[i-1], fromTo[i],
-  #                           output=c("epath"))$epath[[1]]
-  #    sp2 = c(sp2, sptmp[-c(1, length(sptmp))])
-  #    sp0 = c(sp0, sptmp)
+  ind <- unique(ind)
 
   oldNodes <- unique(as.vector(edge[ind, ]))
   mNodes <- max(network$edge)
@@ -154,7 +136,7 @@ circNetwork <- function(x, ord = NULL) {
   res <- stree(nTips, tip.label = attr(x, "labels"))
   res$edge[, 2] <- ord
   res$edge.length <- NULL
-  x <- SHORTwise(x, nTips)
+  x <- SHORTwise(x) #, nTips)
   spRes <- as.splits(res)[res$edge[, 2]]
   index <- match(spRes, x)
 
@@ -165,10 +147,8 @@ circNetwork <- function(x, ord = NULL) {
     index <- match(spRes, x)
   }
 
-  l <- lengths(oneWise(x, nTips))
+  l <- lengths(ONEwise(x))
   l2 <- lengths(x)
-
-  #    dm <- as.matrix(compatible2(x))
 
   tmp <- countCycles(x, ord = ord)
   ind <- which(tmp == 2 & l2 > 1) # & l<nTips changed with ordering
@@ -176,7 +156,7 @@ circNetwork <- function(x, ord = NULL) {
   #    ind = ind[order(l[ind])]
   ind <- ind[order(l2[ind], decreasing = TRUE)]
 
-  dm2 <- as.matrix(compatible2(x, x[ind]))
+  dm2 <- as.matrix(compatible(x, x[ind]))
 
   X <- as.matrix(x)[, ord]
   Y <- X
@@ -273,7 +253,7 @@ circNetwork <- function(x, ord = NULL) {
 }
 
 
-#' Conversion among phylogenetic network 0bjects
+#' Conversion among phylogenetic network objects
 #'
 #' \code{as.networx} convert \code{splits} objects into a \code{networx}
 #' object. And most important there exists a generic \code{plot} function to
@@ -324,30 +304,17 @@ as.networx <- function(x, ...) {
 }
 
 
-getOrdering <- function(x, opt=TRUE) {
-  tree <- as.phylo(x, TRUE)
-  tree <- reorder(tree)
-  if(opt) tree <- optCycle(x, tree)
-#  tree <- as.phylo(x)
-  nTips <- length(tree$tip.label)
-  ord <- reorder(tree)$edge[, 2]
-  ord <- ord[ord <= nTips]
-  ind <- which(ord == 1L)
-  if (ind > 1) ord <- c(ord[ind:nTips], ord[c(1:(ind - 1L))])
-  ord
-}
-
 
 #' @export
 addTrivialSplits <- function(obj) {
-  label <- attr(obj, "label")
+  label <- attr(obj, "labels")
   nTips <- length(label)
   weight <- attr(obj, "weights")
   if (is.null(weight)) weight <- rep(1, length(obj))
   STree <- stree(nTips, tip.label = attr(obj, "labels"))
   STree$edge.length <- NULL
   spRes <- as.splits(STree)[STree$edge[, 2]]
-  tmpIndex <- match(spRes, SHORTwise(obj, nTips))
+  tmpIndex <- match(spRes, SHORTwise(obj))
   if (any(is.na(tmpIndex))) {
     l.na <- sum(is.na(tmpIndex))
     obj <- c(obj, spRes[is.na(tmpIndex)])
@@ -360,7 +327,7 @@ addTrivialSplits <- function(obj) {
 
 #' @export
 removeTrivialSplits <- function(obj) {
-  nTips <- length(attr(obj, "label"))
+  nTips <- length(attr(obj, "labels"))
   l <- lengths(obj)
   ind <- which( (l == 0L) | (l == 1L) | (l == nTips) | (l == (nTips - 1L)))
   obj[-ind]
@@ -368,16 +335,16 @@ removeTrivialSplits <- function(obj) {
 
 
 #' @rdname as.networx
-#' @importFrom igraph shortest_paths decompose
+#' @importFrom igraph shortest_paths all_shortest_paths decompose E
 #' @importFrom Matrix spMatrix
 #' @method as.networx splits
 #' @export
-as.networx.splits <- function(x, planar = FALSE, coord = c("none", "2D", "3D"),
-                              ...) {
-  label <- attr(x, "label")
+as.networx.splits <- function(x, planar = FALSE, coord = "none", ...) {
+  label <- attr(x, "labels")
+  coord <- match.arg(coord, c("none", "equal angle", "3D", "2D"))
   x <- addTrivialSplits(x)
   nTips <- length(label)
-  x <- oneWise(x, nTips)
+  x <- ONEwise(x)
   l <- lengths(x)
   if (any(l == nTips)) x <- x[l != nTips] # get rid of trivial splits
   l <- lengths(x)
@@ -390,7 +357,8 @@ as.networx.splits <- function(x, planar = FALSE, coord = c("none", "2D", "3D"),
   if (!is.null(attr(x, "cycle"))) {
     c.ord <- attr(x, "cycle")
   }
-  else c.ord <- getOrdering(x)
+  else c.ord <- cophenetic(x) |> getOrderingNN()
+
   attr(x, "cycle") <- c.ord
   # check for star tree
   if(length(x)==nTips) return(as.phylo(x))
@@ -403,7 +371,7 @@ as.networx.splits <- function(x, planar = FALSE, coord = c("none", "2D", "3D"),
     return(reorder(tmp))
   }
 
-  dm <- as.matrix(compatible2(x))
+  dm <- as.matrix(compatible(x))
   ll <- lengths(x)
   ind <- tmp$splitIndex     # match(sp, x)
   ind2 <- union(ind, which(ll == 0)) # which(duplicated(x))
@@ -427,6 +395,7 @@ as.networx.splits <- function(x, planar = FALSE, coord = c("none", "2D", "3D"),
   coord <- match.arg(coord)
   vert <- switch(coord,
     "none" = NULL,
+    "equal angle" = coords.equal.angle(tmp),
     "2D" = coords(tmp, dim = "2D"),
     "3D" = coords(tmp, dim = "3D"))
   #    attr(tmp, "coords") <- coordinates
@@ -521,13 +490,13 @@ createLabel <- function(x, y, label_y, type = "edge", nomatch = NA) {
   spl_y <- as.splits(y)
   if (inherits(y, "phylo", TRUE) == 1) spl_y <- spl_y[y$edge[, 2]]
 
-  tiplabel <- attr(spl_x, "label")
+  tiplabel <- attr(spl_x, "labels")
   nTips <- length(tiplabel)
 
   spl_y <- changeOrder(spl_y, tiplabel)
-  spl_y <- SHORTwise(spl_y, nTips)
+  spl_y <- SHORTwise(spl_y)
 
-  ind <- match(SHORTwise(spl_x, nTips), spl_y)
+  ind <- match(SHORTwise(spl_x), spl_y)
   pos <-  which(!is.na(ind))
 
   res <- rep(nomatch, length(spl_x))
@@ -579,7 +548,7 @@ createLabel <- function(x, y, label_y, type = "edge", nomatch = NA) {
 #' nnet <- addConfidences(nnet, boot_trees)
 #'
 #' plot(tree, show.node.label=TRUE)
-#' plot(nnet, "2D", show.edge.label=TRUE)
+#' plot(nnet, show.edge.label=TRUE)
 #'
 #' @rdname addConfidences
 #' @export
@@ -633,7 +602,7 @@ addConfidences.splits <- function(x, y, scaler = 1, ...) {
     add <- list(...)$add
   else add <- FALSE
 
-  tiplabel <- attr(x, "label")
+  tiplabel <- attr(x, "labels")
   nTips <- length(tiplabel)
   #    x = addTrivialSplits(x)
   if (inherits(y, "phylo")) {
@@ -652,9 +621,10 @@ addConfidences.splits <- function(x, y, scaler = 1, ...) {
   }
 
   spl <- as.splits(y)
+# postprocess.proppart
   spl <- changeOrder(spl, tiplabel)
-  spl <- oneWise(spl, nTips)
-  ind <- match(oneWise(x, nTips), spl)
+  spl <- SHORTwise(spl)
+  ind <- match(SHORTwise(x), spl)
   #    pos <-  which(ind > nTips)
   pos <-  which(!is.na(ind))
   confidences <- rep(NA_real_, length(x)) # numeric(length(x))  #character
@@ -686,7 +656,7 @@ addConfidences.phylo <- function(x, y, ...) {
     as.is <- list(...)$as.is
   else as.is <- TRUE
   nTips <- length(x$tip.label)
-  spl <- as.splits(x) %>% oneWise(nTips = nTips)
+  spl <- as.splits(x) |> SHORTwise()
   conf <- attr(addConfidences(spl, y), "confidences")
   l <- lengths(spl)
   if (is.character(conf)) as.is <- TRUE
@@ -699,6 +669,15 @@ addConfidences.phylo <- function(x, y, ...) {
   x
 }
 
+
+#' @export
+addConfidences.multiPhylo <- function(x, y, ...) {
+  x <- .uncompressTipLabel(x)
+  x <- unclass(x)
+  x <- lapply(x, addConfidences, y)
+  class(x) <- "multiPhylo"
+  x
+}
 
 #' @rdname addConfidences
 #' @export
@@ -756,7 +735,7 @@ spl2angle <- function(x) {
   if (!is.null(attr(x, "cycle"))) ord <- attr(x, "cycle")
   x <- changeOrder(x, attr(x, "labels")[ord])
   y <- lapply(x, function(x, l) (x - 1) / l * 360, l = l)
-  angle <- vapply(y, circ.mean, 0) %>% deg2rad()
+  angle <- vapply(y, circ.mean, 0) |> deg2rad()
   # angle <- ((vapply(x, sum, 0) / lengths(x) - 1) / l ) * 2*pi
   # kreis2kart(attr(x, "weight"), angle)
   angle
@@ -767,7 +746,7 @@ coords.equal.angle <- function(obj) {
   if (is.null(attr(obj, "order")) || (attr(obj, "order") == "postorder"))
     obj <- reorder.networx(obj)
   spl <- obj$splits
-  spl <- SHORTwise(spl, length(obj$tip.label))
+  spl <- SHORTwise(spl) #, length(obj$tip.label))
   l <- length(obj$edge.length)
 #  ind1 <- which(!duplicated(obj$splitIndex))
   n <- max(obj$edge)
@@ -895,7 +874,8 @@ edgeLabels <- function(xx, yy, zz = NULL, edge) {
 #' splits (e.g. splits.color) than for edges. These overwrite values edge.color.
 #'
 #' @param x an object of class \code{"networx"}
-#' @param type "3D" to plot using rgl or "2D" in the normal device.
+#' @param type "3D" to plot using rgl or "equal angle" and "2D" in the normal
+#' device.
 #' @param use.edge.length a logical indicating whether to use the edge weights
 #' of the network to draw the branches (the default) or not.
 #' @param show.tip.label a logical indicating whether to show the tip labels on
@@ -970,7 +950,10 @@ plot.networx <- function(x, type = "equal angle", use.edge.length = TRUE,
                          col.edge.label = tip.color, font.node.label = font,
                          font.edge.label = font, ...) {
   type <- match.arg(type, c("equal angle", "3D", "2D"))
-  if (use.edge.length == FALSE) x$edge.length[] <- 1
+  if (use.edge.length == FALSE){
+    x$edge.length[] <- 1
+    attr(x$splits, "weight") <- rep(1, length(x$splits))
+  }
   nTips <- length(x$tip.label)
   conf <- attr(x$splits, "confidences")
   index <- x$splitIndex
@@ -1220,7 +1203,7 @@ closest.node <- function(x, y, P) {
 #' data(yeast)
 #' dm <- dist.ml(yeast)
 #' nnet <- neighborNet(dm)
-#' plot(nnet, "2D")
+#' plot(nnet)
 #' identify(nnet) # click close to an edge
 #' }
 #' @importFrom graphics identify

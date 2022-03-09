@@ -27,7 +27,7 @@
 #' start the translation further within the sequence.
 #' @param control a list of parameters for controlling the fitting process.
 #' @param ... further arguments passed to or from other methods.
-#' @return A list whith an element called summary containing a data.frame with
+#' @return A list with an element called summary containing a data.frame with
 #' the log-likelihood, number of estimated parameters, etc. of all tested
 #' models. An object called posterior which contains the posterior probability
 #' for the rate class for each sites and the estimates of the defined models.
@@ -39,7 +39,7 @@
 #'
 #' Sergei L. Kosakovsky Pond, Simon D. W. Frost, Spencer V. Muse (2005) HyPhy:
 #' hypothesis testing using phylogenies, \emph{Bioinformatics}, \bold{21(5)}:
-#' 676--679, https://doi.org/10.1093/bioinformatics/bti079
+#' 676--679, doi:10.1093/bioinformatics/bti079
 #'
 #' Nielsen, R., and Z. Yang. (1998) Likelihood models for detecting positively
 #' selected amino acid sites and applications to the HIV-1 envelope gene.
@@ -52,7 +52,7 @@
 #' data(woodmouse)
 #' dat_codon <- dna2codon(as.phyDat(woodmouse))
 #' tree <- NJ(dist.ml(dat_codon))
-#' # optimise the model the old way
+#' # optimize the model the old way
 #' fit <- pml(tree, dat_codon, bf="F3x4")
 #' M0 <- optim.pml(fit, model="codon1")
 #' # Now using the codonTest function
@@ -68,7 +68,7 @@ codonTest <- function(tree, object, model = c("M0", "M1a", "M2a"),
                       frequencies = "F3x4", opt_freq=FALSE, codonstart = 1,
                       control=pml.control(maxit = 20), ...){
   if (attr(object, "type") == "DNA")
-    object <- dna2codon(object, codonstart = codonstart)
+    object <- dna2codon(object, codonstart = codonstart, ...)
   if (is.null(tree$edge.length)) tree <- nnls.phylo(tree, dist.ml(object))
   if (!("M0" %in% model)) model <- c("M0", model)
   trace <- control$trace

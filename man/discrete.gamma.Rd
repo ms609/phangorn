@@ -2,11 +2,14 @@
 % Please edit documentation in R/discrete.gamma.R
 \name{discrete.gamma}
 \alias{discrete.gamma}
+\alias{discrete.beta}
 \alias{plot_gamma_plus_inv}
 \alias{plotRates}
-\title{Discrete Gamma function}
+\title{Discrete Gamma and Beta distribution}
 \usage{
 discrete.gamma(alpha, k)
+
+discrete.beta(shape1, shape2, k)
 
 plot_gamma_plus_inv(shape = 1, inv = 0, k = 4, discrete = TRUE,
   cdf = TRUE, append = FALSE, xlab = "x", ylab = ifelse(cdf, "F(x)",
@@ -20,14 +23,16 @@ plotRates(obj, cdf.color = "blue", main = "cdf", ...)
 
 \item{k}{Number of intervals of the discrete gamma distribution.}
 
+\item{shape1, shape2}{non-negative parameters of the Beta distribution.}
+
 \item{shape}{Shape parameter of the gamma distribution.}
 
 \item{inv}{Proportion of invariable sites.}
 
-\item{discrete}{logical wether to plot discrete (default) or continous pdf or
+\item{discrete}{logical whether to plot discrete (default) or continuous pdf or
 cdf.}
 
-\item{cdf}{logical wether to plot the cummulative distribution function
+\item{cdf}{logical whether to plot the cumulative distribution function
 or density / probability function.}
 
 \item{append}{logical; if TRUE only add to an existing plot.}
@@ -38,7 +43,7 @@ or density / probability function.}
 
 \item{xlim}{the x limits of the plot.}
 
-\item{verticals}{ogical; if TRUE, draw vertical lines at steps.}
+\item{verticals}{logical; if TRUE, draw vertical lines at steps.}
 
 \item{edge.length}{Total edge length (sum of all edges in a tree).}
 
@@ -82,7 +87,7 @@ par(old.par)
 
 }
 \seealso{
-\code{\link{pml.fit}, \link{stepfun}}
+\code{\link{pml.fit}, \link{stepfun}, link{pgamma}, link{pbeta}},
 }
 \author{
 Klaus Schliep \email{klaus.schliep@gmail.com}

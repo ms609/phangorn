@@ -78,9 +78,8 @@ fun.spr <- function(x, tree) sum(SPR.dist(x, tree))
 
 dist.superTree <- function(tree, trace = 0, fun, start = NULL,
                            multicore = FALSE, mc.cores = NULL) {
-  if (multicore && is.null(mc.cores)) {
-    mc.cores <- detectCores()
-  }
+  if(.Platform$OS.type=="windows") multicore <- FALSE
+  if (multicore && is.null(mc.cores)) mc.cores <- detectCores()
   if (is.null(start)) start <- superTree(tree, rooted = FALSE)
   if (inherits(start, "multiPhylo")) start <- start[[1]]
   best_tree <- unroot(start)
@@ -122,7 +121,7 @@ dist.superTree <- function(tree, trace = 0, fun, start = NULL,
 #'
 #' @param tree an object of class \code{multiPhylo}
 #' @param method An argument defining which algorithm is used to optimize the
-#' tree.  Possible are "MRP", "NNI", and "SPR".
+#' tree.  Possible are "MRP", "RF", and "SPR".
 #' @param rooted should the resulting supertrees be rooted.
 #' @param trace defines how much information is printed during optimization.
 #' @param start a starting tree can be supplied.
@@ -145,7 +144,8 @@ dist.superTree <- function(tree, trace = 0, fun, start = NULL,
 #'
 #' data(Laurasiatherian)
 #' set.seed(1)
-#' bs <- bootstrap.phyDat(Laurasiatherian, FUN = function(x)upgma(dist.hamming(x)), bs=50)
+#' bs <- bootstrap.phyDat(Laurasiatherian,
+#'                        FUN = function(x) upgma(dist.hamming(x)), bs=50)
 #'
 #' mrp_st <- superTree(bs)
 #' plot(mrp_st)

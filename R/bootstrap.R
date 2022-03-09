@@ -1,18 +1,41 @@
-candidate.tree <- function(x){
-  if(attr(x, "nc") > 31){
-     dm <- dist.ml(x)
-     tree <- fastme.bal(dm, nni = TRUE, spr = FALSE, tbr = FALSE)
-     tree$edge.length[tree$edge.length<0] <- 1e-8
+minEdge <- function(tree, tau=1e-8, enforce_ultrametric=FALSE){
+  if(tau<0) stop("tau must be >= 0!")
+  if(any(tree$edge.length < tau) || enforce_ultrametric){
+    rooted <- is.rooted(tree)
+    if(enforce_ultrametric) rooted <- TRUE
+    if(rooted){
+      nTip <- Ntip(tree)
+      ind <- seq_len(nTip)
+      nh <- nodeHeight(tree)[ind]
+      if(enforce_ultrametric) nh <- rep(0, nTip)
+    }
+    tree$edge.length[tree$edge.length < tau] <- tau
+    if(rooted){
+      el <- numeric(max(tree$edge))
+      el[tree$edge[,2]] <- tree$edge.length
+      nh2 <- nodeHeight(tree)[ind]
+      el[ind] <- el[ind] + (nh2 - nh)
+      tree$edge.length <- el[tree$edge[,2]]
+    }
+  }
+  tree
+}
+
+
+candidate.tree <- function(x, rooted=FALSE, eps = 1e-8, ...){
+  if(rooted){
+     dm <- dist.ml(x, ...)
+     tree <- wpgma(dm)
   }
   else{
     tree <- random.addition(x)
-    tree <- optim.parsimony(tree, x)
+    tree <- optim.parsimony(tree, x, trace=0)
     tree <- multi2di(tree)
     tree <- unroot(tree)
     tree <- acctran(tree, x)
     tree$edge.length <- tree$edge.length / sum(attr(x, "weight"))
   }
-  tree
+  minEdge(tree, tau=eps)
 }
 
 
@@ -20,8 +43,8 @@ candidate.tree <- function(x){
 #'
 #' \code{bootstrap.pml} performs (non-parametric) bootstrap analysis and
 #' \code{bootstrap.phyDat} produces a list of bootstrapped data sets.
-#' \code{plotBS} plots a phylogenetic tree with the with the bootstrap values
-#' assigned to the (internal) edges.
+#' \code{plotBS} plots a phylogenetic tree with the bootstrap values assigned
+#' to the (internal) edges.
 #'
 #' It is possible that the bootstrap is performed in parallel, with help of the
 #' multicore package. Unfortunately the multicore package does not work under
@@ -38,18 +61,6 @@ candidate.tree <- function(x){
 #' @param \dots further parameters used by \code{optim.pml} or
 #' \code{plot.phylo}.
 #' @param FUN the function to estimate the trees.
-#' @param tree The tree on which edges the bootstrap values are plotted.
-#' @param BStrees a list of trees (object of class "multiPhylo").
-#' @param type the type of tree to plot, so far "cladogram", "phylogram" and
-#' "unrooted" are supported.
-#' @param bs.col color of bootstrap support labels.
-#' @param bs.adj one or two numeric values specifying the horizontal and
-#' vertical justification of the bootstrap labels.
-#' @param p only plot support values higher than this percentage number
-#' (default is 80).
-#' @param frame a character string specifying the kind of frame to be printed
-#' around the bootstrap values. This must be one of "none" (the default),
-#' "rect" or "circle".
 #' @return \code{bootstrap.pml} returns an object of class \code{multi.phylo}
 #' or a list where each element is an object of class \code{pml}. \code{plotBS}
 #' returns silently a tree, i.e. an object of class \code{phylo} with the
@@ -57,11 +68,15 @@ candidate.tree <- function(x){
 #' if not supplied the tree with labels supplied in the \code{node.label} slot.
 #' @author Klaus Schliep \email{klaus.schliep@@gmail.com}
 #' @seealso \code{\link{optim.pml}}, \code{\link{pml}},
-#' \code{\link{plot.phylo}},
+#' \code{\link{plot.phylo}}, \code{\link{maxCladeCred}}
 #' \code{\link{nodelabels}},\code{\link{consensusNet}} and
 #' \code{\link{SOWH.test}} for parametric bootstrap
 #' @references Felsenstein J. (1985) Confidence limits on phylogenies. An
 #' approach using the bootstrap. \emph{Evolution} \bold{39}, 783--791
+#'
+#' Lemoine, F., Entfellner, J. B. D., Wilkinson, E., Correia, D., Felipe, M. D.,
+#' De Oliveira, T., & Gascuel, O. (2018). Renewing Felsenstein’s phylogenetic
+#' bootstrap in the era of big data. \emph{Nature}, \bold{556(7702)}, 452--456.
 #'
 #' Penny D. and Hendy M.D. (1985) Testing methods evolutionary tree
 #' construction. \emph{Cladistics} \bold{1}, 266--278
@@ -73,12 +88,12 @@ candidate.tree <- function(x){
 #'
 #' \dontrun{
 #' data(Laurasiatherian)
-#' dm <- dist.logDet(Laurasiatherian)
+#' dm <- dist.hamming(Laurasiatherian)
 #' tree <- NJ(dm)
 #' # NJ
 #' set.seed(123)
 #' NJtrees <- bootstrap.phyDat(Laurasiatherian,
-#'      FUN=function(x)NJ(dist.logDet(x)), bs=100)
+#'      FUN=function(x)NJ(dist.hamming(x)), bs=100)
 #' treeNJ <- plotBS(tree, NJtrees, "phylogram")
 #'
 #' # Maximum likelihood
@@ -104,9 +119,8 @@ candidate.tree <- function(x){
 #' @export
 bootstrap.pml <- function(x, bs = 100, trees = TRUE, multicore = FALSE,
                           mc.cores = NULL, ...) {
-  if (multicore && is.null(mc.cores)) {
-    mc.cores <- detectCores()
-  }
+  if(.Platform$OS.type=="windows") multicore <- FALSE
+  if (multicore && is.null(mc.cores)) mc.cores <- detectCores()
   extras <- match.call(expand.dots = FALSE)$...
   rearr <- c("optNni", "rearrangement")
   tmp <- pmatch(names(extras), rearr)
@@ -142,11 +156,7 @@ bootstrap.pml <- function(x, bs = 100, trees = TRUE, multicore = FALSE,
     attr(data, "weight") <- weights[ind]
     fit <- update(fit, data = data)
     if(do_rearr){
-      if(is_ultrametric){
-        tree <- dist.ml(data, bf=fit$bf, Q=fit$Q) %>% wpgma()
-      }
-      else tree <- candidate.tree(data)
-
+      tree <- candidate.tree(data, rooted = is_ultrametric, bf=fit$bf, Q=fit$Q)
       fit <- update(fit, tree = tree)
     }
     fit <- optim.pml(fit, ...)
@@ -176,9 +186,8 @@ bootstrap.pml <- function(x, bs = 100, trees = TRUE, multicore = FALSE,
 #' @export
 bootstrap.phyDat <- function(x, FUN, bs = 100, multicore = FALSE,
                              mc.cores = NULL, jumble = TRUE, ...) {
-  if (multicore && is.null(mc.cores)) {
-    mc.cores <- detectCores()
-  }
+  if(.Platform$OS.type=="windows") multicore <- FALSE
+  if (multicore && is.null(mc.cores)) mc.cores <- detectCores()
   weight <- attr(x, "weight")
   v <- rep(seq_along(weight), weight)
   BS <- vector("list", bs)
@@ -241,47 +250,100 @@ matchEdges <- function(tree1, tree2) {
 
 
 checkLabels <- function(tree, tip) {
-  ind <- match(tip, tree$tip.label)
+  ind <- match(tree$tip.label, tip)
   if (any(is.na(ind)) | length(tree$tip.label) != length(tip)) {
     stop("tree has different labels")
   }
-  tree$tip.label <- tree$tip.label[ind]
-  ind2 <- match(seq_along(ind), tree$edge[, 2])
-  tree$edge[ind2, 2] <- order(ind)
+  tree$tip.label <- tip #tree$tip.label[ind]
+  ind2 <- tree$edge[, 2] <= Ntip(tree)
+  tree$edge[ind2, 2] <- ind[tree$edge[ind2, 2]]
   tree
 }
 
 
-#' @rdname bootstrap.pml
+#' Plotting trees with bootstrap values
+#'
+#' \code{plotBS} plots a phylogenetic tree with the bootstrap values assigned
+#' to the (internal) edges. It can also used to assign bootstrap values to a
+#' phylogenetic tree.
+#'
+#' \code{plotBS} can either assign the classical Felsenstein’s bootstrap
+#' proportions (FBP) (Felsenstein (1985), Hendy & Penny (1985))  or the
+#' transfer bootstrap expectation (TBE) of Lemoine et al. (2018). Using the
+#' option \code{type=="n"} just assigns the bootstrap values and return the tree
+#' without plotting it.
+#'
+#' @param tree The tree on which edges the bootstrap values are plotted.
+#' @param BStrees a list of trees (object of class "multiPhylo").
+#' @param type the type of tree to plot, one of "phylogram", "cladogram", "fan",
+#' "unrooted", "radial" or "none". If type is "none" the tree is returned with
+#' the bootstrap values assigned to the node labels.
+#' @param method either "FBP" the classical bootstrap (default) or "TBE"
+#' (transfer bootstrap)
+#' @param bs.col color of bootstrap support labels.
+#' @param bs.adj one or two numeric values specifying the horizontal and
+#' vertical justification of the bootstrap labels.
+#' @param digits integer indicating the number of decimal places.
+#' @param p only plot support values higher than this percentage number
+#' (default is 0).
+#' @param \dots further parameters used by \code{plot.phylo}.
+#' @param frame a character string specifying the kind of frame to be printed
+#' around the bootstrap values. This must be one of "none" (the default),
+#' "rect" or "circle".
+#' @return \code{plotBS} returns silently a tree, i.e. an object of class
+#' \code{phylo} with the bootstrap values as node labels. The argument
+#' \code{BStrees} is optional and if not supplied the labels supplied
+#' in the \code{node.label} slot will be used.
+#' @author Klaus Schliep \email{klaus.schliep@@gmail.com}
+#' @seealso  \code{\link{plot.phylo}}, \code{\link{maxCladeCred}}
+#' \code{\link{nodelabels}}, \code{\link{consensus}}, \code{\link{consensusNet}}
+#' @references Felsenstein J. (1985) Confidence limits on phylogenies. An
+#' approach using the bootstrap. \emph{Evolution} \bold{39}, 783--791
+#'
+#' Lemoine, F., Entfellner, J. B. D., Wilkinson, E., Correia, D., Felipe, M. D.,
+#' De Oliveira, T., & Gascuel, O. (2018). Renewing Felsenstein’s phylogenetic
+#' bootstrap in the era of big data. \emph{Nature}, \bold{556(7702)}, 452--456.
+#'
+#' Penny D. and Hendy M.D. (1985) Testing methods evolutionary tree
+#' construction. \emph{Cladistics} \bold{1}, 266--278
+#'
+#' Penny D. and Hendy M.D. (1986) Estimating the reliability of evolutionary
+#' trees. \emph{Molecular Biology and Evolution} \bold{3}, 403--417
+#' @examples
+#' fdir <- system.file("extdata/trees", package = "phangorn")
+#' # RAxML best-known tree with bipartition support (from previous analysis)
+#' raxml.tree <- read.tree(file.path(fdir,"RAxML_bipartitions.woodmouse"))
+#' # RAxML bootstrap trees (from previous analysis)
+#' raxml.bootstrap <- read.tree(file.path(fdir,"RAxML_bootstrap.woodmouse"))
+#' par(mfrow=c(1,2))
+#' plotBS(raxml.tree,  raxml.bootstrap, "p")
+#' plotBS(raxml.tree,  raxml.bootstrap, "p", "TBE")
 #' @export
-plotBS <- function(tree, BStrees, type = "unrooted", bs.col = "black",
-                   bs.adj = NULL, p = 50, frame = "none", ...) {
+plotBS <- function(tree, BStrees, type = "unrooted",
+                   method="FBP", bs.col = "black",
+                   bs.adj = NULL, digits=3, p = 0, frame = "none", ...) {
   type <- match.arg(type, c("phylogram", "cladogram", "fan", "unrooted",
                             "radial", "none"))
+  method <- match.arg(method, c("FBP", "TBE"))
   if (hasArg(BStrees)) {
-    BStrees <- .uncompressTipLabel(BStrees) # check if needed
-    if (any(is.rooted(BStrees))) BStrees <- unroot(BStrees)
-    x <- prop.clades(tree, BStrees)
-    x <- (x / length(BStrees)) * 100
-    tree$node.label <- x
+    if(method=="FBP"){
+      BStrees <- .uncompressTipLabel(BStrees) # check if needed
+      if (any(is.rooted(BStrees))) BStrees <- unroot(BStrees)
+      x <- prop.clades(tree, BStrees)
+      x <- (x / length(BStrees)) * 100
+      tree$node.label <- x
+    }
+    else {
+      tree <- transferBootstrap(tree, BStrees)
+      x <- tree$node.label
+    }
   }
   else {
     if (is.null(tree$node.label)) stop("You need to supply 'trees' or the tree needs support-values as node.label")
     x <- tree$node.label
   }
   if(type=="none") return( tree )
-
-#  if (type == "phylogram" | type == "cladogram") {
-#    if (!is.rooted(tree) & !is.null(tree$edge.length)) {
-#      tree2 <- midpoint(tree)
-#    } else {
-#      tree2 <- tree
-#    }
-#    plot(tree2, type = type, ...)
-#  }
-#  else {
     plot(tree, type = type, ...)
-#  }
 
   label <- c(rep(0, length(tree$tip.label)), x)
   ind <- get("last_plot.phylo", envir = .PlotPhyloEnv)$edge[ ,2 ]
@@ -289,15 +351,12 @@ plotBS <- function(tree, BStrees, type = "unrooted", bs.col = "black",
     root <- getRoot(tree)
     label <- c(rep(0, length(tree$tip.label)), x)
     label[root] <- 0
-#    ind2 <- matchEdges(tree2, tree)
-#    label <- label[ind2]
     ind <- which(label > p)
-    #        browser()
     if (is.null(bs.adj)) {
       bs.adj <- c(1, 1)
     }
     if (length(ind) > 0) {
-      if(is.numeric(label)) label <- round(label)
+      if(is.numeric(label)) label <- round(label, digits = digits)
       nodelabels(
         text = label[ind], node = ind,
         frame = frame, col = bs.col, adj = bs.adj, ...
@@ -310,7 +369,7 @@ plotBS <- function(tree, BStrees, type = "unrooted", bs.col = "black",
     }
     ind2 <- which(label[ind] > p)
     if (length(ind2 > 0)) {
-      if(is.numeric(label)) label <- round(label)
+      if(is.numeric(label)) label <- round(label, digits = digits)
       edgelabels(label[ind][ind2], ind2,
         frame = frame,
         col = bs.col, adj = bs.adj, ...
@@ -347,7 +406,7 @@ plotBS <- function(tree, BStrees, type = "unrooted", bs.col = "black",
 #' credibility or a numeric vector of clade credibilities for each tree.
 #' @author Klaus Schliep \email{klaus.schliep@@gmail.com}
 #' @seealso \code{\link{consensus}}, \code{\link{consensusNet}},
-#' \code{\link{prop.part}}
+#' \code{\link{prop.part}}, \code{\link{bootstrap.pml}}, \code{\link{plotBS}}
 #' @keywords cluster
 #' @importFrom fastmatch fmatch
 #' @examples
@@ -383,7 +442,7 @@ maxCladeCred <- function(x, tree = TRUE, part = NULL, rooted = TRUE) {
   if (inherits(x, "phylo")) x <- c(x)
   if (is.null(part)) {
     if (!rooted) {
-      pp <- unroot(x) %>% prop.part()
+      pp <- unroot(x) |> prop.part()
     } else {
       pp <- prop.part(x)
     }
@@ -392,7 +451,9 @@ maxCladeCred <- function(x, tree = TRUE, part = NULL, rooted = TRUE) {
     pp <- part
   }
   pplabel <- attr(pp, "labels")
-  if (!rooted) pp <- oneWise(pp)
+  if (!rooted){
+    pp <- postprocess.prop.part(pp, method="SHORTwise")
+  }
   x <- .uncompressTipLabel(x)
   class(x) <- NULL
   m <- max(attr(pp, "number"))
@@ -403,7 +464,7 @@ maxCladeCred <- function(x, tree = TRUE, part = NULL, rooted = TRUE) {
     tmp <- checkLabels(x[[i]], pplabel)
     if (!rooted) tmp <- unroot(tmp)
     ppi <- prop.part(tmp) # trees[[i]]
-    if (!rooted) ppi <- oneWise(ppi)
+    if (!rooted) ppi <- SHORTwise(ppi)
     indi <- fmatch(ppi, pp)
     if (any(is.na(indi))) {
       res[i] <- -Inf
@@ -414,6 +475,7 @@ maxCladeCred <- function(x, tree = TRUE, part = NULL, rooted = TRUE) {
   if (tree) {
     k <- which.max(res)
     tr <- x[[k]]
+    tr <- addConfidences(tr, pp)
     attr(tr, "clade.credibility") <- res[k]
     return(tr)
   }
@@ -431,9 +493,9 @@ mcc <- maxCladeCred
 allCompat <- function(x) {
   x <- unroot(x)
   l <- length(x)
-  spl <- prop.part(x)
-  spl <- postprocess.prop.part(spl)
-  spl <- as.splits(spl)
+  pp <- prop.part(x)
+  pp <- postprocess.prop.part(pp, method = "SHORTwise")
+  spl <- as.splits(pp)
   w <- attr(spl, "weights")
   ind <- (w / l) > 0.5
   res <- spl[ind]
@@ -441,10 +503,11 @@ allCompat <- function(x) {
   w <- attr(spl, "weights")
   ord <- order(w, decreasing = TRUE)
   for(i in ord){
-    if(all(compatible2(res, spl[i]) == 0)) res <- c(res, spl[i])
+    if(all(compatible(res, spl[i]) == 0)) res <- c(res, spl[i])
   }
   tree <- as.phylo(res, FALSE)
-#  tree$edge.length <- NULL
+  tree$edge.length <- NULL
+  tree <- addConfidences(tree, pp)
   tree
 }
 
@@ -454,7 +517,7 @@ cladeMatrix <- function(x, rooted = FALSE) {
   if (!rooted) x <- unroot(x)
   pp <- prop.part(x)
   pplabel <- attr(pp, "labels")
-  if (!rooted) pp <- oneWise(pp)
+  if (!rooted) pp <- SHORTwise(pp)
   x <- .uncompressTipLabel(x)
   nnodes <- Nnode(x)
   class(x) <- NULL
@@ -470,7 +533,7 @@ cladeMatrix <- function(x, rooted = FALSE) {
   k <- 1
   for (i in 1:l) {
     ppi <- prop.part(x[[i]])
-    if (!rooted) ppi <- oneWise(ppi)
+    if (!rooted) ppi <- SHORTwise(ppi)
     indi <- sort(fmatch(ppi, pp))
     ivec[from[i]:to[i]] <- indi
   }

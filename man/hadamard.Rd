@@ -39,7 +39,7 @@ Hadamard matrix H with a vector v using fast Hadamard multiplication.
 (binary, RY-coded) or 4-state (DNA/RNA) data. \code{write.nexus.splits}
 writes splits returned from \code{h2st} or
 \code{\link[phangorn]{distanceHadamard}} to a nexus file, which can be
-processed by Spectronet or Splitstree.
+processed by Spectronet or SplitsTree.
 }
 \examples{
 
@@ -56,18 +56,15 @@ fit2 <- h2st(dat_ry)
 lento(fit2)
 
 # write.nexus.splits(fit2, file = "test.nxs")
-# read this file into Spectronet or Splitstree to show the network
-\dontrun{
-dat <- as.character(yeast)
-dat4 <- phyDat(dat, type="USER", levels=c("a","c", "g", "t"), ambiguity=NULL)
-fit4 <- h4st(dat4)
+# read this file into Spectronet or SplitsTree to show the network
+
+fit4 <- h4st(yeast)
 old.par <- par(no.readonly = TRUE)
 par(mfrow=c(3,1))
 lento(fit4[[1]], main="Transversion")
 lento(fit4[[2]], main="Transition 1")
 lento(fit4[[3]], main="Transition 2")
 par(old.par)
-}
 
 }
 \references{

@@ -30,7 +30,7 @@ start the translation further within the sequence.}
 \item{...}{further arguments passed to or from other methods.}
 }
 \value{
-A list whith an element called summary containing a data.frame with
+A list with an element called summary containing a data.frame with
 the log-likelihood, number of estimated parameters, etc. of all tested
 models. An object called posterior which contains the posterior probability
 for the rate class for each sites and the estimates of the defined models.
@@ -58,7 +58,7 @@ The convergence may be very slow and sometimes fails.
 data(woodmouse)
 dat_codon <- dna2codon(as.phyDat(woodmouse))
 tree <- NJ(dist.ml(dat_codon))
-# optimise the model the old way
+# optimize the model the old way
 fit <- pml(tree, dat_codon, bf="F3x4")
 M0 <- optim.pml(fit, model="codon1")
 # Now using the codonTest function
@@ -74,7 +74,7 @@ Approach}. Oxford University Press, Oxford
 
 Sergei L. Kosakovsky Pond, Simon D. W. Frost, Spencer V. Muse (2005) HyPhy:
 hypothesis testing using phylogenies, \emph{Bioinformatics}, \bold{21(5)}:
-676--679, https://doi.org/10.1093/bioinformatics/bti079
+676--679, doi:10.1093/bioinformatics/bti079
 
 Nielsen, R., and Z. Yang. (1998) Likelihood models for detecting positively
 selected amino acid sites and applications to the HIV-1 envelope gene.

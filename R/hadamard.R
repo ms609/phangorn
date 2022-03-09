@@ -74,7 +74,7 @@ ldfactorial <- function(x) {
 #' (binary, RY-coded) or 4-state (DNA/RNA) data. \code{write.nexus.splits}
 #' writes splits returned from \code{h2st} or
 #' \code{\link[phangorn]{distanceHadamard}} to a nexus file, which can be
-#' processed by Spectronet or Splitstree.
+#' processed by Spectronet or SplitsTree.
 #'
 #' @param x a vector of length \eqn{2^n}, where n is an integer.
 #' @param v a vector of length \eqn{2^n}, where n is an integer.
@@ -116,18 +116,15 @@ ldfactorial <- function(x) {
 #' lento(fit2)
 #'
 #' # write.nexus.splits(fit2, file = "test.nxs")
-#' # read this file into Spectronet or Splitstree to show the network
-#' \dontrun{
-#' dat <- as.character(yeast)
-#' dat4 <- phyDat(dat, type="USER", levels=c("a","c", "g", "t"), ambiguity=NULL)
-#' fit4 <- h4st(dat4)
+#' # read this file into Spectronet or SplitsTree to show the network
+#'
+#' fit4 <- h4st(yeast)
 #' old.par <- par(no.readonly = TRUE)
 #' par(mfrow=c(3,1))
 #' lento(fit4[[1]], main="Transversion")
 #' lento(fit4[[2]], main="Transition 1")
 #' lento(fit4[[3]], main="Transition 2")
 #' par(old.par)
-#' }
 #'
 #' @rdname hadamard
 #' @export hadamard
@@ -146,7 +143,7 @@ hadamard <- function(x) {
 fhm <- function(v) {
   n <- length(v)
   n <- log2(n)
-  res <- .C("C_fhm", v = as.double(v), n = as.integer(n))$v #
+  res <- .Call("_phangorn_fhm_new", v = as.double(v), n = as.integer(n))
   res
 }
 
@@ -188,7 +185,7 @@ split2seq <- function(q) {
 #' dm <- as.matrix(dm)
 #' fit <- distanceHadamard(dm)
 #' lento(fit)
-#' plot(as.networx(fit), "2D")
+#' plot(as.networx(fit))
 #'
 #' @export distanceHadamard
 distanceHadamard <- function(dm, eps = 0.001) {
@@ -204,8 +201,7 @@ distanceHadamard <- function(dm, eps = 0.001) {
   ns <- 2^(n - 1)
   if (n > 23)
     stop("Hadamard conjugation works only efficient for n < 24")
-  result <- .Call("dist2spectra", dm, as.integer(n), as.integer(ns),
-    PACKAGE = "phangorn")
+  result <- .Call('dist2spectra', dm, as.integer(n), as.integer(ns))
   weights <- -fhm(result) / 2^(n - 2)
 
   if (eps > 0) {
@@ -229,10 +225,10 @@ distanceHadamard <- function(dm, eps = 0.001) {
 #' @rdname hadamard
 #' @export
 h4st <- function(obj, levels = c("a", "c", "g", "t")) {
-  if (is.matrix(obj))
-    obj <- as.data.frame(t(obj))
-  if (inherits(obj, "phyDat"))
-    obj <- as.data.frame(t(as.character(obj)))
+  if (!inherits(obj, "phyDat")) stop("obj needs to be of class phyDat!")
+  if (attr(obj, "nc") != 4L) stop("Error")
+  obj <- removeAmbiguousSites(obj)
+  obj <- as.data.frame(t(as.character(obj)))
 
   n <- dim(obj)[1]
   p <- dim(obj)[2]
@@ -284,6 +280,7 @@ h4st <- function(obj, levels = c("a", "c", "g", "t")) {
 h2st <- function(obj, eps = 0.001) {
   if (!inherits(obj, "phyDat")) stop("Error")
   if (attr(obj, "nc") != 2) stop("Error")
+  obj <- removeAmbiguousSites(obj)
   nr <- attr(obj, "nr") # n
   p <- length(obj) # p
   weight <- attr(obj, "weight")

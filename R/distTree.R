@@ -48,110 +48,6 @@
 }
 
 
-wpgma_weights <- function(tree){
-  ntips <- Ntip(tree)
-  tree_u <- unroot(tree)
-  ind <- sort(unique( tree_u$edge[,1]) )[-1]
-  desc <- Descendants(tree_u, ind)
-  x <- seq_len(ntips)
-  w <- integer( ntips * (ntips-1L) / 2 )
-  for(i in seq_along(ind)){
-    ind <- getIndex(desc[[i]], x[-desc[[i]]], ntips)
-    w[ind] <- w[ind] + 1L
-  }
-  w
-}
-
-upgma.edge.length <- function(x, dm, method = "average") {
-  METHODS <- c("average", "single", "complete", "mcquitty")
-  i.meth <- match.arg(method, METHODS)
-  X <- designTree(x, "rooted", TRUE)
-  labels <- x$tip
-  if (is.matrix(dm) || inherits(dm, "dist")) {
-    dm <- as.matrix(dm)[labels, labels]
-    dm <- dm[lower.tri(dm)]
-  }
-  ind <- X@i + 1
-  node <- X@p
-  X@x[] <- 1
-  nh <- numeric(max(x$edge))
-  Y <- X * dm
-  if(i.meth=="mcquitty"){
-    w <- .5 ^ wpgma_weights(x)
-    Y <- X * (dm * w)
-    Y[,1] <- Y[,1]/2
-#    Y = as.matrix(X)
-#    beta = solve( t(Y) %*% diag(w) %*% Y ) %*% (t(Y) %*% diag(w) %*% y)
-#    nh[X@nodes] <- beta
-#    x$edge.length <- (nh[x$edge[, 1]] - nh[x$edge[, 2]]) / 2
-#    return( x )
-  }
-
-  for (i in 1:(length(node) - 1)) {
-    pos <- ind[(node[i] + 1):node[i + 1]]
-    tmp <- switch(i.meth,
-      average = mean(Y[pos, i]),
-      mcquitty = sum(Y[pos, i]),
-      single = min(Y[pos, i]),
-      complete = max(Y[pos, i]))
-    nh[X@nodes[i]] <- tmp
-  }
-  x$edge.length <- (nh[x$edge[, 1]] - nh[x$edge[, 2]]) / 2
-  x
-}
-
-
-upgma_nni <- function(d, method = "average", opt = "min", trace = 0,
-                      mc.cores = 2L){
-  METHODS <- c("average", "single", "complete", "mcquitty")
-  method <- match.arg(method, METHODS)
-  OPT <- c("min", "ls")
-  opt <- match.arg(opt, OPT)
-  tree <- upgma(d, method = method)
-  labels <- tree$tip.label
-  nTips <- length(labels)
-  y <- as.matrix(d)[labels, labels]
-  y <- y[lower.tri(y)]
-  best.tree <- tree
-  bestLS <- sum( (coph(best.tree) - y)^2)
-  bestME <- sum(best.tree$edge.length)
-  run.nni <- TRUE
-  count_nni <- 0
-  if (trace > 0) print(count_nni)
-  while (run.nni) {
-    trees <- nni(best.tree)
-    trees <- .uncompressTipLabel(trees)
-    trees <- unclass(trees)
-    nni.trees <- lapply(trees, upgma.edge.length, y, method = method)
-    ind <- which(vapply(nni.trees, function(x) !any(x$edge.length < 0), FALSE))
-    if (length(ind) == 0) return(best.tree)
-    nni.trees <- nni.trees[ind]
-    if (opt == "min") {
-      ME <- vapply(nni.trees, function(x) sum(x$edge.length), 0)
-      if (any(ME < bestME)) {
-        bestME <- min(ME)
-        count_nni <- count_nni + 1
-        best.tree <- nni.trees[[which.min(ME)]]
-        if (trace > 0) print(bestME)
-      }
-      else run.nni <- FALSE
-    }
-    else {
-      LS <- vapply(nni.trees, function(x) sum( (coph(x) - y)^2), 0)
-      if (any(LS < bestLS)) {
-        bestLS <- min(LS)
-        count_nni <- count_nni + 1
-        best.tree <- nni.trees[[which.min(LS)]]
-        if (trace > 0) print(bestLS)
-      }
-      else run.nni <- FALSE
-    }
-  }
-  best.tree
-}
-
-
-
 #' Neighbor-Joining
 #'
 #' This function performs the neighbor-joining tree estimation of Saitou and
@@ -207,12 +103,11 @@ UNJ <- function(x){
   w <- rep(1, l)
   while (l > 2) {
     r <- rowSums(d) / (l - 2)
-    i <- 0
-    j <- 0
-    tmp <- .C("out", as.double(d), as.double(r), as.integer(l), as.integer(i),
-              as.integer(j))
-    e2 <- tmp[[5]]
-    e1 <- tmp[[4]]
+#    i <- 0
+#    j <- 0
+    tmp <- out_cpp(d, r, l)
+    e2 <- tmp[2]
+    e1 <- tmp[1]
     l1 <- d[e1, e2] / 2 + sum( (d[e1, -c(e1, e2)] - d[e2, -c(e1, e2)]) *
                                 w[-c(e1, e2)]) / (2 * (n - w[e1] - w[e2]))
     l2 <- d[e1, e2] / 2 + sum( (d[e2, -c(e1, e2)] - d[e1, -c(e1, e2)]) *
@@ -261,7 +156,7 @@ UNJ <- function(x){
 #' @param splits one of "all", "star".
 #' @param dm a distance matrix.
 #' @param rooted compute a "rooted" or "unrooted" tree.
-#' @param trace defines how much information is printed during optimisation.
+#' @param trace defines how much information is printed during optimization.
 #' @param \dots further arguments, passed to other methods.
 #' @param weight vector of weights to be used in the fitting process.
 #' Weighted least squares is used with weights w, i.e., sum(w * e^2) is
@@ -306,11 +201,11 @@ designTree <- function(tree, method = "unrooted", sparse = FALSE, ...) {
 }
 
 
-# splits now work
 designUnrooted <- function(tree, order = NULL) {
   if (inherits(tree, "phylo")) {
-    if (is.rooted(tree))
-      tree <- unroot(tree)
+    if (is.rooted(tree)) tree <- unroot(tree)
+    tree <- reorder(tree, "postorder")
+#    p <- as.matrix(as.splits(tree)[tree$edge[,2]])
     p <- bipartition(tree)
   }
   if (inherits(tree, "splits")) p <- as.matrix(tree)
@@ -336,7 +231,7 @@ designUnrooted <- function(tree, order = NULL) {
 
 
 designUltra <- function(tree, sparse = TRUE) {
-  if (is.null(attr(tree, "order")) || attr(tree, "order") == "cladewise")
+  if (is.null(attr(tree, "order")) || attr(tree, "order") != "postorder")
     tree <- reorder(tree, "postorder")
   leri <- allChildren(tree)
   bp <- bip(tree)
@@ -560,7 +455,7 @@ nnls.splits <- function(x, dm, trace = 0) {
   dm <- dm[labels, labels]
   y <- dm[lower.tri(dm)]
 
-  x <- SHORTwise(x, k)
+  x <- SHORTwise(x) #, k) # use ape version
   l <- lengths(x)
   if (any(l == 0)) x <- x[-which(l == 0)]
 
@@ -659,7 +554,7 @@ designAll <- function(n, add.split = FALSE) {
 designStar <- function(n, sparse = TRUE) {
   #    res=NULL
   #    for(i in 1:(n-1)) res = rbind(res,cbind(matrix(0,(n-i),i-1),1,diag(n-i)))
-  res <- stree(n) %>% as.splits %>% splits2design
+  res <- stree(n) |> as.splits() |> splits2design()
   if (!sparse) return(as.matrix(res))
   res
 }

@@ -15,7 +15,7 @@
 #' @param recursive	logical. If recursive = TRUE, the function recursively
 #' descends through lists (and pairlists) combining all their elements into a
 #' vector.
-#' @param obj an object of class splits.
+#' @param obj1,obj2 an object of class splits.
 #' @param k number of taxa.
 #' @param labels names of taxa.
 #' @return \code{as.splits} returns an object of class splits, which is mainly
@@ -35,7 +35,7 @@
 #' (sp <- as.splits(rtree(5)))
 #' write.nexus.splits(sp)
 #' spl <- allCircularSplits(5)
-#' plot(as.networx(spl), "2D")
+#' plot(as.networx(spl))
 #'
 #' @rdname as.splits
 #' @export
@@ -120,56 +120,25 @@ changeOrder <- function(x, labels) {
 ## @rdname as.splits
 #' @export
 matchSplits <- function(x, y, as.in = TRUE) {
-  tiplabel <- attr(x, "label")
-  if (any(is.na(match(tiplabel, attr(y, "label")))))
+  tiplabel <- attr(x, "labels")
+  if (any(is.na(match(tiplabel, attr(y, "labels")))))
     stop("x and y have different labels!")
   nTips <- length(tiplabel)
   y <- changeOrder(y, tiplabel)
-  y <- SHORTwise(y, nTips)
-  if (as.in) return(match(SHORTwise(x, nTips), y, nomatch = 0L) > 0L)
-  match(SHORTwise(x, nTips), y)
+  y <- SHORTwise(y) #, nTips)
+  if (as.in) return(match(SHORTwise(x), y, nomatch = 0L) > 0L)
+  match(SHORTwise(x), y)
 }
 
 
-optCycle <- function(splits, tree) {
-  tips <- tree$tip.label
-  tree <- reorder(tree)
-  nodes <- sort(unique(tree$edge[, 1]))
 
+countCycles <- function(splits, ord = NULL) {
   M <- as.matrix(splits)
-
-  l <- as.integer(nrow(M))
-  m <- as.integer(ncol(M))
-
-  tmp <- tree$edge[, 2]
-  tmp <- tmp[tmp <= m]
-
-  start <- .C("countCycle", M[, tmp], l, m, integer(1))[[4]]
-  best <- start
-  eps <- 1
-  if (eps > 0) {
-    for (i in seq_along(nodes)) {
-      tmptree <- rotate(tree, nodes[i])
-      tmp <- tmptree$edge[, 2]
-      tmp <- tmp[tmp <= m]
-      tmpC <- .C("countCycle", M[, tmp], l, m, integer(1))[[4]]
-      if (tmpC < best) {
-        best <- tmpC
-        tree <- tmptree
-      }
-    }
-    eps <- start - best
+  if(is.null(ord)){
+    ord <- attr(splits, "cycle")
+    if(is.null(ord)) ord <- seq_along(attr(splits, "labels"))
   }
-  tree
-}
-
-
-countCycles <- function(splits, tree = NULL, ord = NULL) {
-  M <- as.matrix(splits)
-  l <- as.integer(nrow(M))
-  m <- as.integer(ncol(M))
-  if (!is.null(tree)) ord  <- getOrdering(tree)
-  res <- .C("countCycle2", M[, ord], l, m, integer(l))[[4]]
+  res <- countCycle2_cpp(M[, ord])
   res
 }
 
@@ -210,7 +179,7 @@ c.splits <- function(..., recursive = FALSE) {
 #' @export
 unique.splits <- function(x, incomparables = FALSE, unrooted = TRUE, ...) {
   nTips <- length(attr(x, "labels"))
-  x <- SHORTwise(x, nTips)
+  x <- SHORTwise(x)
   x[!duplicated(x)]
 }
 
@@ -258,19 +227,25 @@ as.splits.phylo <- function(x, ...) {
 #' @method as.splits multiPhylo
 #' @export
 as.splits.multiPhylo <- function(x, ...) {
+  if (hasArg(trivial))
+    trivial <- list(...)$trivial
+  else trivial <- TRUE
   lx <-  length(x)
   x <- unroot(x)
   splits <- prop.part(x)
-  splits <- postprocess.prop.part(splits)
+  splits <- postprocess.prop.part(splits, method="SHORTwise")
   class(splits) <- "list"
   weights <- attr(splits, "number")
   lab <- attr(splits, "labels")
   attr(splits, "labels") <- attr(splits, "number") <- NULL
   l <- length(lab)
-  splitTips <- vector("list", l)
-  for (i in 1:l) splitTips[[i]] <- i
-  result <- c(splitTips, splits)
-  attr(result, "weights") <- c(rep(lx, l), weights)
+  if(trivial){
+    splitTips <- vector("list", l)
+    for (i in 1:l) splitTips[[i]] <- i
+    result <- c(splitTips, splits)
+    attr(result, "weights") <- c(rep(lx, l), weights)
+  }
+  else attr(result, "weights") <- weights
   attr(result, "confidences") <- attr(result, "weights") / lx
   attr(result, "summary") <- list(confidences = "ratio", ntrees = lx,
                                   clades = FALSE)
@@ -330,7 +305,7 @@ as.phylo.splits <- function(x, check=TRUE,...){
 splits2phylo <- function(x){
   labels <- attr(x, "labels")
   nTips <- length(labels)
-  x <- SHORTwise(x, nTips, TRUE)
+  x <- SHORTwise(x)
   l <- lengths(x)
   x <- x[order(l)]
   x <- x[lengths(x) > 1]
@@ -364,7 +339,7 @@ compatibleSplits <- function(x) {
   x <- postprocess.splits(x)
   labels <- attr(x, "labels")
   nTips <- length(labels)
-  x <- SHORTwise(x, nTips)
+  x <- SHORTwise(x)
 #  x <- x[lengths(x)>1]
   dm <- as.matrix(compatible(x))
   rs <- rowSums(dm)
@@ -386,7 +361,7 @@ postprocess.splits <- function (x)
   #  w <- attr(x, "number")
   tmp <- attributes(x)
   labels <- attr(x, "labels")
-  x <- SHORTwise(x, length(labels))
+  x <- SHORTwise(x)
   drop <- duplicated(x)
   if (any(drop)) {
     W <- ifelse (is.null(tmp$weights), FALSE, TRUE)
@@ -451,37 +426,7 @@ as.splits.bitsplits <- function(x, ...){
 # computes compatible splits
 #' @rdname as.splits
 #' @export
-compatible <- function(obj) {
-  labels <- attr(obj, "labels")
-  if (!inherits(obj, "splits")) stop("obj needs to be of class splits")
-
-  l <- length(labels)
-  n <- length(obj)
-
-  bp <- matrix(0L, n, l)
-  for (i in 1:n) bp[i, obj[[i]]] <- 1L
-  bp[bp[, 1] == 0L, ] <- 1L - bp[bp[, 1] == 0L, ]
-  k <- 1
-  res <- matrix(0L, n, n)
-
-  tmp1 <- tcrossprod(bp) # sum(bp[i,]* bp[j,])
-  tmp2 <- tcrossprod(1L - bp) # sum((1L - bp[i,])*(1L - bp[j,]))
-  tmp3 <- tcrossprod(bp, 1L - bp) # sum(bp[i,]*(1L - bp[j,]))
-  tmp4 <- tcrossprod(1L - bp, bp) # sum((1L - bp[i,])*bp[j,])
-  res[(tmp1 * tmp2 * tmp3 * tmp4) > 0] <- 1L
-  k <- k + 1
-
-  res <- res[lower.tri(res)]
-  attr(res, "Size") <- n
-  attr(res, "Diag") <- FALSE
-  attr(res, "Upper") <- FALSE
-  class(res) <- "dist"
-  return(res)
-}
-
-
-# replace compatible ??
-compatible2 <- function(obj1, obj2 = NULL) {
+compatible <- function(obj1, obj2 = NULL) {
   if (!inherits(obj1, "splits"))
     stop("obj needs to be of class splits")
   labels <- attr(obj1, "labels")
@@ -516,7 +461,7 @@ compatible2 <- function(obj1, obj2 = NULL) {
   return(res)
 }
 
-
+# in clanistic.R ??
 compatible3 <- function(x, y = NULL) {
   if (!inherits(x, "splits"))
     stop("x needs to be of class splits")
@@ -558,18 +503,6 @@ compatible3 <- function(x, y = NULL) {
 
 compatible_2 <- function(obj1, obj2) {
   ntaxa <- length(obj1$labels)
-  msk <- !as.raw(2^(8 - (ntaxa %% 8)) - 1)
-  r0 <- as.raw(0)
-  arecompatible2 <- function(x, y, msk, r0) {
-    foo <- function(v) {
-      lv <- length(v)
-      v[lv] <- v[lv] & msk
-      as.integer(all(v == r0))
-    }
-    nE <- foo(x & y) + foo(x & !y) + foo(!x & y) + foo(!x & !y)
-    if (nE > 0) TRUE
-    else FALSE
-  }
   m1 <- obj1$matsplit
   m2 <- obj2$matsplit
   n1 <- ncol(m1)
@@ -578,7 +511,7 @@ compatible_2 <- function(obj1, obj2) {
   for (i in 1:n1) {
     j <- 1
     while (j <= n2) {
-      if (!arecompatible2(m1[, i], m2[, j], msk, r0)) {
+      if (!ape::arecompatible(m1[, i], m2[, j], ntaxa)) {
         res[i] <- FALSE
         break()
       }

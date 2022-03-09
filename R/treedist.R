@@ -22,7 +22,9 @@ coph <- function(x, path = FALSE) {
 cophenetic.splits <- function(x) {
   labels <- attr(x, "labels")
   X <- splits2design(x)
-  dm <- as.vector(X %*% attr(x, "weight"))
+  weights <- attr(x, "weight")
+  if(is.null(weights)) weights <- rep(1, length(x))
+  dm <- as.vector(X %*% weights)
   attr(dm, "Size") <- length(labels)
   attr(dm, "Labels") <- labels
   attr(dm, "Diag") <- FALSE
@@ -54,49 +56,12 @@ cophenetic.networx <- function(x) {
 }
 
 
-SHORTwise <- function(x, nTips, delete = FALSE) {
-  v <- 1:nTips
-  l <- lengths(x)
-  lv <- floor(nTips / 2)
-  for (i in seq_along(x)) {
-    if (l[i] > lv) {
-      y <- x[[i]]
-      x[[i]] <- v[-y]
-    }
-    if (l[i] == nTips / 2) {
-      y <- x[[i]]
-      if (y[1] != 1)
-        x[[i]] <- v[-y]
-    }
-  }
-  if (any(l == nTips) && delete) {
-    x <- x[l != nTips]
-  }
-  x
-}
-
-
-oneWise <- function(x, nTips = NULL) {
-  if (is.null(nTips)) nTips <- length(x[[1L]])
-  v <- 1:nTips
-  for (i in seq_along(x)) {
-    y <- x[[i]]
-    if (y[1] != 1)
-      y <- v[-y]
-    if (y[1] != 1)
-      y <- v[-y]
-    x[[i]] <- y
-  }
-  x
-}
-
-
 ## @aliases treedist RF.dist wRF.dist KF.dist path.dist sprdist SPR.dist
 #' Distances between trees
 #'
 #' \code{treedist} computes different tree distance methods and \code{RF.dist}
 #' the Robinson-Foulds or symmetric distance. The Robinson-Foulds distance only
-#' depends on the toplogy of the trees. If edge weights should be considered
+#' depends on the topology of the trees. If edge weights should be considered
 #' \code{wRF.dist} calculates the weighted RF distance (Robinson & Foulds
 #' 1981). and \code{KF.dist} calculates the branch score distance (Kuhner &
 #' Felsenstein 1994).  \code{path.dist} computes the path difference metric as
@@ -203,8 +168,8 @@ treedist <- function(tree1, tree2, check.labels = TRUE) {
 
   bp1 <- bip(tree1)
   bp2 <- bip(tree2)
-  bp1 <- SHORTwise(bp1, length(tree1$tip.label))
-  bp2 <- SHORTwise(bp2, length(tree2$tip.label))
+  bp1 <- SHORTwise(bp1)
+  bp2 <- SHORTwise(bp2)
   bp1 <- sapply(bp1, paste, collapse = "_")
   bp2 <- sapply(bp2, paste, collapse = "_")
 
@@ -281,9 +246,9 @@ sprdist <- function(tree1, tree2) {
   if (!is.binary(tree1) | !is.binary(tree2)) message("Trees are not binary!")
   # possibly replace bip with bipart
   bp1 <- bip(tree1)
-  bp1 <- SHORTwise(bp1, lt1)
+  bp1 <- SHORTwise(bp1)
   bp2 <- bip(tree2)
-  bp2 <- SHORTwise(bp2, lt2)
+  bp2 <- SHORTwise(bp2)
 
   bp1 <- bp1[ lengths(bp1) > 1 ] # only internal nodes
   bp2 <- bp2[ lengths(bp2) > 1 ]
@@ -292,6 +257,8 @@ sprdist <- function(tree1, tree2) {
   # OBS: SPR distance works w/ incompatible splits only, but it needs common
   # cherries (to replace by single leaf)
   spr <- .Call("C_sprdist", bp1, bp2, lt1)
+  tmp <- .Call("C_sprdist", bp2, bp1, lt1)[1]
+  spr[1] <- min(spr[1], tmp)
   names(spr) <- c("spr", "spr_extra", "rf", "hdist")
   spr
 }
@@ -306,21 +273,22 @@ SPR1 <- function(trees) {
 
   nTips <- length(trees[[1]]$tip.label)
 
-  fun <- function(x, nTips) {
+  fun <- function(x) {
     bp <- bipart(x)
-    bp <- SHORTwise(bp, nTips)
+    bp <- SHORTwise(bp)
     bp <- bp[ lengths(bp) > 1 ]
     bp
   }
 
-  BP <- lapply(trees, fun, nTips)
+  BP <- lapply(trees, fun)
   k <- 1
   l <- length(trees)
   SPR <- numeric( (l * (l - 1)) / 2)
   for (i in 1:(l - 1)) {
     bp <- BP[[i]]
     for (j in (i + 1):l) {
-      SPR[k] <-  .Call("C_sprdist", bp, BP[[j]], nTips)[1]
+      SPR[k] <-  min( .Call("C_sprdist", bp, BP[[j]], nTips)[1],
+                      .Call("C_sprdist", BP[[j]], bp, nTips)[1])
       k <- k + 1
     }
   }
@@ -346,18 +314,20 @@ SPR2 <- function(tree, trees) {
   if (has.singles(tree)) tree <- collapse.singles(tree)
   nTips <- length(tree$tip.label)
 
-  fun <- function(x, nTips) {
+  fun <- function(x) {
     bp <- bipart(x)
-    bp <- SHORTwise(bp, nTips)
+    bp <- SHORTwise(bp)
     bp <- bp[ lengths(bp) > 1 ]
     bp
   }
 
-  bp <-  fun(tree, nTips)
+  bp <-  fun(tree)
   l <- length(trees)
   SPR <- numeric(l)
   for (i in 1:l) {
-    SPR[i] <- .Call("C_sprdist", bp, fun(trees[[i]], nTips), nTips)[1]
+    bpi <- fun(trees[[i]])
+    SPR[i] <- min(.Call("C_sprdist", bp, bpi, nTips)[1],
+                  .Call("C_sprdist", bpi, bp, nTips)[1])
   }
   if (!is.null(names(trees))) names(SPR) <- names(trees)
   return(SPR)
@@ -405,8 +375,8 @@ wRF0 <- function(tree1, tree2, normalize = FALSE, check.labels = TRUE,
   bp1 <- bip(tree1)
   bp2 <- bip(tree2)
   if (!rooted) {
-    bp1 <- SHORTwise(bp1, length(tree1$tip.label))
-    bp2 <- SHORTwise(bp2, length(tree2$tip.label))
+    bp1 <- SHORTwise(bp1)
+    bp2 <- SHORTwise(bp2)
   }
   bp1 <- sapply(bp1, paste, collapse = "_")
   bp2 <- sapply(bp2, paste, collapse = "_")
@@ -465,7 +435,7 @@ wRF2 <- function(tree, trees, normalize = FALSE, check.labels = TRUE,
 
   fun2 <- function(x, nTips) {
     bp <- bip(x)
-    bp <- SHORTwise(bp, nTips)
+    bp <- SHORTwise(bp)
     bp <- sapply(bp, paste, collapse = "_")
     bp
   }
@@ -481,7 +451,7 @@ wRF2 <- function(tree, trees, normalize = FALSE, check.labels = TRUE,
 
   bp <- bip(tree)
 
-  if (!rooted) bp <- SHORTwise(bp, nTips)
+  if (!rooted) bp <- SHORTwise(bp)
   bp <- sapply(bp, paste, collapse = "_")
 
   w <- numeric(max(tree$edge))
@@ -534,7 +504,7 @@ wRF1 <- function(trees, normalize = FALSE, check.labels = TRUE,
   W <- lapply(trees, fun1)
   fun2 <- function(x, nTips) {
     bp <- bip(x)
-    bp <- SHORTwise(bp, nTips)
+    bp <- SHORTwise(bp)
     bp <- sapply(bp, paste, collapse = "_")
     bp
   }
@@ -608,10 +578,10 @@ mRF2 <- function(tree, trees, normalize = FALSE, check.labels = TRUE,
   tree <- reorder(tree, "postorder")
   trees <- reorder(trees, "postorder")
   xx <- lapply(trees, bipart)
-  if (!rooted) xx <- lapply(xx, SHORTwise, nTips)
+  if (!rooted) xx <- lapply(xx, SHORTwise)
   xx <- lapply(xx, function(x) sapply(x, paste, collapse = "_"))
   yy <- bipart(tree)
-  if (!rooted) yy <- SHORTwise(yy, nTips)
+  if (!rooted) yy <- SHORTwise(yy)
   yy <- sapply(yy, paste, collapse = "_")
 
   NnodeT <- Nnode(tree)
@@ -669,7 +639,7 @@ mRF <- function(trees, normalize = FALSE, rooted = FALSE) {
   trees <- unclass(trees)
 
   xx <- lapply(trees, bipart)
-  if (!rooted) xx <- lapply(xx, SHORTwise, nTips)
+  if (!rooted) xx <- lapply(xx, SHORTwise)
   xx <- lapply(xx, function(x) sapply(x, paste, collapse = "_"))
   # returns list of character vectors
 
@@ -724,8 +694,8 @@ RF0 <- function(tree1, tree2 = NULL, normalize = FALSE, check.labels = TRUE,
   bp2 <- bipart(tree2)
   nTips <- length(tree1$tip.label)
   if (!rooted) {
-    bp1 <- SHORTwise(bp1, nTips)
-    bp2 <- SHORTwise(bp2, nTips)
+    bp1 <- SHORTwise(bp1)
+    bp2 <- SHORTwise(bp2)
   }
   RF <- sum(match(bp1, bp2, nomatch = 0L) == 0L) +
     sum(match(bp2, bp1, nomatch = 0L) == 0L)
@@ -789,8 +759,8 @@ kf0 <- function(tree1, tree2, check.labels = TRUE, rooted = FALSE) {
   bp2 <- bip(tree2)
 
   if (!rooted) {
-    bp1 <- SHORTwise(bp1, length(tree1$tip.label))
-    bp2 <- SHORTwise(bp2, length(tree2$tip.label))
+    bp1 <- SHORTwise(bp1)
+    bp2 <- SHORTwise(bp2)
   }
   bp1 <- sapply(bp1, paste, collapse = "_")
   bp2 <- sapply(bp2, paste, collapse = "_")
@@ -844,7 +814,7 @@ kf1 <- function(tree, trees, check.labels = TRUE, rooted = FALSE) {
 
   fun2 <- function(x, nTips) {
     bp <- bip(x)
-    bp <- SHORTwise(bp, nTips)
+    bp <- SHORTwise(bp)
     bp <- sapply(bp, paste, collapse = "_")
     bp
   }
@@ -858,7 +828,7 @@ kf1 <- function(tree, trees, check.labels = TRUE, rooted = FALSE) {
 
   if (!rooted & is.rooted(tree)) tree <- unroot(tree)
   bp <- bip(tree)
-  if (!rooted) bp <- SHORTwise(bp, nTips)
+  if (!rooted) bp <- SHORTwise(bp)
   bp <- sapply(bp, paste, collapse = "_")
 
   w <- numeric(max(tree$edge))
@@ -906,7 +876,7 @@ kf2 <- function(trees, check.labels = TRUE, rooted = FALSE) {
 
   fun2 <- function(x, nTips) {
     bp <- bip(x)
-    bp <- SHORTwise(bp, nTips)
+    bp <- SHORTwise(bp)
     bp <- sapply(bp, paste, collapse = "_")
     bp
   }

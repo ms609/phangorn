@@ -6,7 +6,7 @@
 \alias{optim.pml}
 \title{Likelihood of a tree.}
 \usage{
-pml.control(epsilon = 1e-08, maxit = 10, trace = 1)
+pml.control(epsilon = 1e-08, maxit = 10, trace = 1, tau = 1e-08)
 
 pml(tree, data, bf = NULL, Q = NULL, inv = 0, k = 1, shape = 1,
   rate = 1, model = NULL, site.rate = "gamma", ...)
@@ -14,16 +14,18 @@ pml(tree, data, bf = NULL, Q = NULL, inv = 0, k = 1, shape = 1,
 optim.pml(object, optNni = FALSE, optBf = FALSE, optQ = FALSE,
   optInv = FALSE, optGamma = FALSE, optEdge = TRUE, optRate = FALSE,
   optRooted = FALSE, control = pml.control(epsilon = 1e-08, maxit = 10,
-  trace = 1L), model = NULL, rearrangement = ifelse(optNni, "NNI", "none"),
-  subs = NULL, ratchet.par = list(iter = 20L, maxit = 100L, prop = 1/2),
-  ...)
+  trace = 1L, tau = 1e-08), model = NULL, rearrangement = ifelse(optNni,
+  "NNI", "none"), subs = NULL, ratchet.par = list(iter = 20L, maxit = 200L,
+  minit = 100L, prop = 1/2), ...)
 }
 \arguments{
-\item{epsilon}{Stop criterion for optimisation (see details).}
+\item{epsilon}{Stop criterion for optimization (see details).}
 
 \item{maxit}{Maximum number of iterations (see details).}
 
 \item{trace}{Show output during optimization (see details).}
+
+\item{tau}{minimal edge length.}
 
 \item{tree}{A phylogenetic \code{tree}, object of class \code{phylo}.}
 
@@ -46,13 +48,13 @@ details.}
 
 \item{site.rate}{Indicates what type of gamma distribution to use. Options
 are "gamma" approach of Yang 1994 (default), "quadrature" after the Laguerre
-quadrature approach of Felsenstein 2001.}
+quadrature approach of Felsenstein 2001 or "freerate".}
 
 \item{\dots}{Further arguments passed to or from other methods.}
 
 \item{object}{An object of class \code{pml}.}
 
-\item{optNni}{Logical value indicating whether toplogy gets optimized (NNI).}
+\item{optNni}{Logical value indicating whether topology gets optimized (NNI).}
 
 \item{optBf}{Logical value indicating whether base frequencies gets
 optimized.}
@@ -98,14 +100,14 @@ parameters.
 Base frequencies in \code{pml} can be supplied in different ways.
 For amino acid they are usually defined through specifying a model, so the
 argument bf does not need to be specified. Otherwise if \code{bf=NULL},
-each state is given equal probabilty. It can be a numeric vector given the
+each state is given equal probability. It can be a numeric vector given the
 frequencies. Last but not least \code{bf} can be string "equal", "empirical"
 and for codon models additionally "F3x4".
 
 The topology search uses a nearest neighbor interchange (NNI) and the
 implementation is similar to phyML.  The option model in pml is only used
 for amino acid models.  The option model defines the nucleotide model which
-is getting optimised, all models which are included in modeltest can be
+is getting optimized, all models which are included in modeltest can be
 chosen. Setting this option (e.g. "K81" or "GTR") overrules options optBf
 and optQ.  Here is a overview how to estimate different phylogenetic models
 with \code{pml}: \tabular{lll}{ model \tab optBf \tab optQ \cr Jukes-Cantor
@@ -117,7 +119,7 @@ TVMe, TVM, SYM and GTR.  These models are specified as in Posada (2008).
 
 So far 17 amino acid models are supported ("WAG", "JTT", "LG", "Dayhoff",
 "cpREV", "mtmam", "mtArt", "MtZoa", "mtREV24", "VT","RtREV", "HIVw", "HIVb",
-"FLU", "Blossum62", "Dayhoff_DCMut" and "JTT_DCMut") and additionally rate
+"FLU", "Blosum62", "Dayhoff_DCMut" and "JTT_DCMut") and additionally rate
 matrices and amino acid frequencies can be supplied.
 
 It is also possible to estimate codon models (e.g. YN98), for details see

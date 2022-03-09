@@ -21,8 +21,8 @@ read.fasta.user <- function (file, skip = 0, nlines = 0,
     seq.names <- getTaxaNames(taxa)
   }
   start <- c(start, length(X) + 1)
-  for (i in 1:n) obj[[i]] <- unlist(strsplit(gsub(" ",
-                                                  "", X[(start[i] + 1):(start[i + 1] - 1)]), NULL))
+  for (i in 1:n) obj[[i]] <- unlist(strsplit(gsub(" ", "",
+                                  X[(start[i] + 1):(start[i + 1] - 1)]), NULL))
   names(obj) <- seq.names
   obj <- lapply(obj, tolower)
   obj
@@ -48,7 +48,7 @@ read.fasta.user <- function (file, skip = 0, nlines = 0,
 #' "clustal", "fasta" or "nexus", or any unambiguous abbreviation of these.
 #' @param type Type of sequences ("DNA", "AA", "CODON" or "USER").
 #' @param ... further arguments passed to or from other methods.
-#' @return \code{read.phyDat} retuns an object of class phyDat,
+#' @return \code{read.phyDat} returns an object of class phyDat,
 #' \code{write.phyDat} write an alignment to a file.
 #' @author Klaus Schliep \email{klaus.schliep@@gmail.com}
 #' @seealso \code{\link[ape]{read.dna}}, \code{\link[ape]{read.GenBank}},
@@ -57,7 +57,7 @@ read.fasta.user <- function (file, skip = 0, nlines = 0,
 #' \url{https://www.ncbi.nlm.nih.gov/blast/fasta.shtml} Felsenstein, J. (1993)
 #' Phylip (Phylogeny Inference Package) version 3.5c. Department of Genetics,
 #' University of Washington.
-#' \url{http://evolution.genetics.washington.edu/phylip/phylip.html}
+#' \url{https://evolution.genetics.washington.edu/phylip/phylip.html}
 #' @examples
 #' fdir <- system.file("extdata/trees", package = "phangorn")
 #' primates <- read.phyDat(file.path(fdir, "primates.dna"),

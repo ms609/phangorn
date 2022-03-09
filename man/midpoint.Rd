@@ -19,10 +19,10 @@ midpoint(tree, node.labels = "support", ...)
 pruneTree(tree, ..., FUN = ">=")
 }
 \arguments{
-\item{tree}{an object of class \code{phylo}}
+\item{tree}{an object of class \code{phylo}.}
 
-\item{node.labels}{are nodel labels 'support' values, 'label' or should be
-'deleted'}
+\item{node.labels}{are node labels 'support' values (edges), 'label' or
+should labels get 'deleted'?}
 
 \item{\dots}{further arguments, passed to other methods.}
 
@@ -46,7 +46,7 @@ so far does not transform node.labels properly.
 \examples{
 
 tree <- rtree(10, rooted = FALSE)
-tree$node.label <- c("", round(runif(tree$Nnode-1), 3))
+tree$node.label <- c("", round(runif(tree$Nnode-1), digits=3))
 
 tree2 <- midpoint(tree)
 tree3 <- pruneTree(tree, .5)

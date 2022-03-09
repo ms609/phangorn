@@ -24,7 +24,7 @@ expect_equal(length(c_spl) , 3L*length(tree2spl))
 expect_equal(length(unique(c_spl)) , length(tree2spl))
 expect_equal(length(distinct.splits(c_spl)) , length(tree2spl))
 spl <- allCircularSplits(6)
-spl <- phangorn:::oneWise(spl, 6)
+spl <- ONEwise(spl)
 write.nexus.splits(spl, "tmp.nex")
 spl2 <- read.nexus.splits("tmp.nex")
 attr(spl2, "splitlabels") <- NULL
@@ -49,11 +49,12 @@ attr(net1, "order") <- NULL
 expect_true(inherits(net1, "networx"))
 expect_true(inherits(net2, "networx"))
 expect_true(inherits(net3, "networx"))
-#     expect_equal(net1, net2, tolerance=1e-6)
-#     expect_equal(net3, net2, tolerance=1e-6)
+expect_equal(net1, net2, use.edge.length = FALSE)
+expect_equal(net3, net2, use.edge.length = FALSE)
 expect_equal(net1, net3)
 unlink("tmp.nex")
-cnet <- consensusNet(as.splits(trees))
+
+cnet <- consensusNet(trees)
 expect_true(inherits(cnet, "networx"))
 net1$edge.length <- cnet$edge.length <- cnet$edge.labels <- NULL
 attr(cnet, "order") <- NULL
@@ -61,10 +62,19 @@ expect_equal(cnet, net1)
 expect_equal(nrow(cnet$edge), length(as.splits(cnet)))
 
 
+
+
 # test consensusNet
 set.seed(1)
+data("Laurasiatherian")
 bs <- bootstrap.phyDat(Laurasiatherian,
                        FUN = function(x)nj(dist.hamming(x)), bs=50)
 cnet <- consensusNet(bs, .2)
 expect_true(inherits(cnet, "networx"))
+
+
+spl <- allSplits(4)
+net <- as.networx(spl)
+expect_equal(Nnode(net), 8L)
+
 

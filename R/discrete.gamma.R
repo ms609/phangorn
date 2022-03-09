@@ -1,4 +1,4 @@
-#' Discrete Gamma function
+#' Discrete Gamma and Beta distribution
 #'
 #' \code{discrete.gamma} internally used for the likelihood computations in
 #' \code{pml} or \code{optim.pml}. It is useful to understand how it works
@@ -11,6 +11,7 @@
 #'
 #' @param shape Shape parameter of the gamma distribution.
 #' @param alpha Shape parameter of the gamma distribution.
+#' @param shape1,shape2 non-negative parameters of the Beta distribution.
 #' @param k Number of intervals of the discrete gamma distribution.
 #' @param inv Proportion of invariable sites.
 #' @param site.rate Indicates what type of gamma distribution to use. Options
@@ -18,19 +19,19 @@
 #' approach of Felsenstein (2001)
 ## or "free_rate" "gamma_unbiased".
 #' @param edge.length Total edge length (sum of all edges in a tree).
-#' @param discrete logical wether to plot discrete (default) or continous pdf or
+#' @param discrete logical whether to plot discrete (default) or continuous pdf or
 #' cdf.
-#' @param cdf logical wether to plot the cummulative distribution function
+#' @param cdf logical whether to plot the cumulative distribution function
 #' or density / probability function.
 #' @param append logical; if TRUE only add to an existing plot.
 #' @param xlab a label for the x axis, defaults to a description of x.
 #' @param ylab a label for the y axis, defaults to a description of y.
 #' @param xlim the x limits of the plot.
-#' @param verticals ogical; if TRUE, draw vertical lines at steps.
+#' @param verticals logical; if TRUE, draw vertical lines at steps.
 #' @param \dots Further arguments passed to or from other methods.
 #' @return \code{discrete.gamma} returns a matrix.
 #' @author Klaus Schliep \email{klaus.schliep@@gmail.com}
-#' @seealso \code{\link{pml.fit}, \link{stepfun}}
+#' @seealso \code{\link{pml.fit}, \link{stepfun}, link{pgamma}, link{pbeta}},
 #' @examples
 #' discrete.gamma(1, 4)
 #'
@@ -54,9 +55,15 @@ discrete.gamma <- function(alpha, k) {
 }
 
 
+#' @rdname discrete.gamma
+#' @importFrom stats pbeta qbeta
+#' @export
 discrete.beta <- function(shape1, shape2, k) {
-  qbeta( ( (0:(k - 1)) + .5) / k, shape1, shape2)
+  quants <- qbeta( (1:(k - 1)) / k, shape1, shape2)
+  diff(c(0, pbeta(quants, shape1 + 1, shape2), 1)) * k * shape1 /
+    (shape1 + shape2)
 }
+
 
 #' @rdname discrete.gamma
 #' @importFrom stats dgamma qgamma stepfun
@@ -88,7 +95,7 @@ plot_gamma_plus_inv <- function(shape=1, inv=0, k=4, discrete=TRUE, cdf=TRUE,
   }
 
   g <- mapply(function(shape, k, inv) max(gw(shape, k, inv, site.rate)[,"g"]),
-              shape, k, inv) %>% max()
+              shape, k, inv) |> max()
 
   if(is.null(xlim)) xlim <- c(-0.25, 1.25 * g)
 
@@ -269,7 +276,6 @@ findRoots <- function(shape, ncats) {
   for (i in 0:ncats) {
 #    coeff[i + 1] <- (-1)^i*nChooseK(ncats + shape, ncats - i)/factorial(i)
     coeff[i + 1] <- (-1)^i * exp(lchoose(ncats + shape, ncats - i) - lfactorial(i))
-#    print(c(coeff[i + 1] - tmp))
   }
   return(sort(Re(polyroot(coeff))))
 }
@@ -322,7 +328,7 @@ Laguerre <- function(x, shape, degree) {
 
 rates_n_weights <- function(shape, k, site.rate = "gamma"){
   site.rate <- match.arg(site.rate, c("gamma", "gamma_unbiased",
-                                      "gamma_quadrature"))
+                                      "gamma_quadrature", "free_rate"))
   if(k==1) rates.and.weights <- matrix(c(1,1), ncol=2L,
                                   dimnames = list(NULL, c("rate", "weight")))
   else{
@@ -337,8 +343,12 @@ rates_n_weights <- function(shape, k, site.rate = "gamma"){
     }
     if(site.rate == "gamma_quadrature")
       rates.and.weights <- LaguerreQuad(shape=shape, k)
-#    if(site.rate == "lognormal")
-#      rates.and.weights <- LogNormalQuad(shape=shape, k)
+    if(site.rate == "free_rate"){
+      g <- rep(1, k)
+      w <- rep(1 / k, k)
+      rates.and.weights <- matrix( c(g, w), ncol=2L,
+                                   dimnames = list(NULL, c("rate", "weight")))
+    }
   }
   rates.and.weights
 }
